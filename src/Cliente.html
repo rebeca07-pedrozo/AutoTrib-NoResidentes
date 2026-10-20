@@ -1,0 +1,578 @@
+<script>
+/* AutoTrib-NoResidentes — interfaz (SPA). Todas las reglas se vuelven a validar en el servidor. */
+(function () {
+'use strict';
+
+var S = { user: null, cfg: null, paises: [], formas: [], hoy: '', resumen: null, vista: '', casos: null, filtros: { estado: '', oficina: '' }, lote: null };
+var F = {}, TOCADO = {};
+
+/* ------------------------------ Utilidades ------------------------------ */
+function $(s, r) { return (r || document).querySelector(s); }
+function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function money(n) { return '$ ' + Math.round(Number(n) || 0).toLocaleString('en-US'); }
+function corto(n) { n = Number(n) || 0; return Math.abs(n) >= 1e6 ? '$' + (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'M' : Math.abs(n) >= 1e3 ? '$' + Math.round(n / 1e3) + 'K' : '$' + n; }
+function fecha(iso) { var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ''); return m ? m[3] + '/' + m[2] + '/' + m[1] : '—'; }
+function soloDigitos(s) { return String(s || '').replace(/\D/g, ''); }
+function fmtNum(s) { var d = soloDigitos(s); return d ? Number(d).toLocaleString('en-US') : ''; }
+
+function api(fn) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  return new Promise(function (ok, ko) {
+    var r = google.script.run.withSuccessHandler(ok).withFailureHandler(function (e) {
+      ko(new Error(String(e && e.message || e).replace(/^(Error: )+/, '')));
+    });
+    r[fn].apply(r, args);
+  });
+}
+
+function toast(msg, tipo) {
+  var t = document.createElement('div');
+  t.className = 'toast ' + (tipo || '');
+  t.textContent = msg;
+  $('#toast-zona').appendChild(t);
+  setTimeout(function () { t.remove(); }, tipo === 'err' ? 6000 : 3500);
+}
+
+function confirmar(titulo, html, textoBtn, claseBtn) {
+  return new Promise(function (res) {
+    var v = document.createElement('div');
+    v.className = 'velo';
+    v.innerHTML = '<div class="modal peq"><div class="modal-h"><h2>' + esc(titulo) + '</h2></div><div class="modal-b">' + html +
+      '</div><div class="modal-p"><button class="btn sec" data-r="0">Cancelar</button><button class="btn ' + (claseBtn || '') + '" data-r="1">' + esc(textoBtn || 'Confirmar') + '</button></div></div>';
+    v.addEventListener('click', function (e) { var b = e.target.closest('[data-r]'); if (b) { v.remove(); res(b.dataset.r === '1'); } });
+    document.body.appendChild(v);
+  });
+}
+
+function conCarga(btn, fn) {
+  var txt = btn.innerHTML; btn.disabled = true; btn.innerHTML = '<span class="spin az" style="width:16px;height:16px;border-width:3px"></span>';
+  return fn().then(function (r) { btn.disabled = false; btn.innerHTML = txt; return r; }, function (e) { btn.disabled = false; btn.innerHTML = txt; throw e; });
+}
+
+/* ------------------------------ Cálculo ------------------------------ */
+function calcular(rend, cdt, tarifa, tarifaSis) {
+  var r4 = Math.round(rend * tarifaSis / 100), r20 = Math.round(rend * tarifa / 100);
+  return { rete4: r4, rete20: r20, diferencia: r20 - r4, saldoNeto: cdt - r20 };
+}
+
+function cajaCalculo(c, tarifa, opts) {
+  opts = opts || {};
+  return '<div class="calc ' + (opts.claro ? 'claro' : '') + '"><h3>' + (opts.titulo || 'Cálculo automático') + '</h3>' +
+    '<div class="fila"><span>Rete Fuente ' + (opts.tarifaSis != null ? opts.tarifaSis : S.cfg.tarifaSistema) + '% (ya pagada)<span class="nota">Automático</span></span><span class="v" data-c="rete4">' + money(c.rete4) + '</span></div>' +
+    (opts.editable || '') +
+    '<div class="fila r"><span>Rete Fuente <span data-c="tarifa">' + tarifa + '</span>% (requerida)</span><span class="v" data-c="rete20">' + money(c.rete20) + '</span></div>' +
+    '<div class="fila r"><span>Diferencia a cobrar<span class="nota">Retención requerida − ya pagada</span></span><span class="v" data-c="diferencia">' + money(c.diferencia) + '</span></div>' +
+    '<div class="fila"><span>Saldo neto cliente<span class="nota">Valor CDT − retención requerida</span></span><span class="v" data-c="saldoNeto">' + money(c.saldoNeto) + '</span></div></div>';
+}
+
+function pintarCalculo(root, c, tarifa) {
+  Object.keys(c).forEach(function (k) { var e = $('[data-c="' + k + '"]', root); if (e) e.textContent = money(c[k]); });
+  var t = $('[data-c="tarifa"]', root); if (t) t.textContent = tarifa;
+}
+
+/* ------------------------------ Estructura ------------------------------ */
+var NAV = {
+  Oficina: [['inicio', '🏠 Inicio'], ['ingresar', '📝 Ingresar CDT'], ['mis', '📂 Mis casos'], ['ayuda', '❓ Ayuda']],
+  Operativo: [['inicio', '🏠 Inicio'], ['panel', '📊 Panel revisión'], ['leasing', '🏘️ Cruce Leasing'], ['alertas', '⏰ Alertas'], ['reportes', '📈 Reportes'], ['ayuda', '❓ Ayuda']],
+  Contabilidad: [['inicio', '🏠 Inicio'], ['panel', '📒 Casos'], ['reportes', '📈 Reportes'], ['ayuda', '❓ Ayuda']]
+};
+
+function marco(contenido) {
+  var nav = S.user ? (NAV[S.user.rol] || []).map(function (n) { return '<button data-act="ir" data-v="' + n[0] + '" class="' + (S.vista === n[0] ? 'act' : '') + '">' + n[1] + '</button>'; }).join('') : '';
+  return '<header class="cab"><div class="cab-in"><div class="logo" data-act="ir" data-v="inicio"><div class="logo-marca">🏦</div><div>DAVIVIENDA<small>AutoTrib · No Residentes</small></div></div>' +
+    '<nav class="nav">' + nav + '</nav>' + (S.user ? '<div class="usuario">' + esc(S.user.nombre) + '<br>' + esc(S.user.rol) + '</div>' : '') + '</div></header>' +
+    '<main><div class="print-cab">🏦 BANCO DAVIVIENDA · AutoTrib No Residentes</div><div class="vista" id="vista">' + contenido + '</div></main>' +
+    '<div class="pie">Banco Davivienda · AutoTrib · Conexión segura (HTTPS)</div>';
+}
+
+function pintar(contenido) { $('#app').innerHTML = marco(contenido); window.scrollTo(0, 0); }
+
+function cargandoVista(txt) { return '<div class="cargando"><div class="spin az"></div><p>' + esc(txt || 'Cargando...') + '</p></div>'; }
+
+function ir(v, extra) {
+  S.vista = v;
+  pintar(cargandoVista());
+  var fn = { inicio: vInicio, ingresar: vFormulario, mis: vMisCasos, panel: vPanel, leasing: vLeasing, alertas: vAlertas, reportes: vReportes, ayuda: vAyuda, pago: vPago, alerta: vAlerta }[v] || vInicio;
+  Promise.resolve(fn(extra)).catch(function (e) { $('#vista').innerHTML = '<div class="banner err">⚠️ ' + esc(e.message) + '</div>'; });
+}
+
+/* ------------------------------ Login ------------------------------ */
+function splash(html) { $('#app').innerHTML = '<div class="splash"><div>' + html + '</div></div>'; }
+
+function arrancar() {
+  splash('<div class="logo-marca" style="width:64px;height:64px;font-size:38px;margin:0 auto;background:#E41F13;border-radius:14px;display:grid;place-items:center">🏦</div><h1>BANCO DAVIVIENDA</h1><div>AutoTrib - No Residentes</div><div class="spin"></div><div>Identificando tu correo...</div><div style="opacity:.7;font-size:13px;margin-top:6px">Por favor espera...</div>');
+  api('iniciarSesion').then(function (r) {
+    if (!r.ok) {
+      splash('<div class="denegado"><h2>❌ Acceso denegado</h2><p>' + esc(r.mensaje) + '</p>' + (r.email ? '<p style="color:#999;font-size:13px">Cuenta: ' + esc(r.email) + '</p>' : '') + '<p>Contacta al administrador.</p></div>');
+      return;
+    }
+    S.user = r.usuario; S.cfg = r.config; S.paises = r.paises; S.formas = r.formasPago; S.hoy = r.hoy; S.resumen = r.resumen;
+    var a = window.ARRANQUE || {};
+    if ((a.vista === 'pago' || a.vista === 'alerta') && a.caso) { S.confirmarAlerta = !!a.confirmar; ir(a.vista, a.caso); } else ir('inicio');
+  }).catch(function (e) { splash('<div class="denegado"><h2>⚠️ Error</h2><p>' + esc(e.message) + '</p><button class="btn" onclick="location.reload()">Reintentar</button></div>'); });
+}
+
+/* ------------------------------ Inicio ------------------------------ */
+function primerNombre() { return esc((S.user.nombre || '').split(' ')[0]); }
+
+function vInicio() {
+  var u = S.user, r = S.resumen || {};
+  var h;
+  if (u.rol === 'Oficina') {
+    h = '<div class="hero"><h1>¡Hola, ' + primerNombre() + '! 👋</h1><p>Eres: <b>OFICINA</b> — ' + esc(u.oficina || 'Sin oficina asignada') + '</p>' +
+      '<ul class="pasos"><li>1️⃣ Completa los datos del CDT</li><li>2️⃣ El sistema calcula las retenciones</li><li>3️⃣ Envía a Leydi para autorizar</li><li>4️⃣ Recibe las instrucciones de pago</li></ul>' +
+      '<div class="acciones"><button class="btn blanco" data-act="ir" data-v="ingresar">📝 Ingresar CDT</button><button class="btn blanco" data-act="ir" data-v="mis">📂 Ver mis casos</button><button class="btn blanco" data-act="ir" data-v="ayuda">❓ Ayuda</button></div></div>' +
+      '<div class="kpis"><div class="kpi"><div class="n">' + (r.total || 0) + '</div><div class="t">Casos ingresados</div></div><div class="kpi rojo"><div class="n">' + (r.pendientes || 0) + '</div><div class="t">En autorización</div></div><div class="kpi verde"><div class="n">' + (r.aprobados || 0) + '</div><div class="t">Aprobados</div></div></div>';
+  } else {
+    var etiqueta = u.rol === 'Operativo' ? 'AUTORIZACIÓN — Operativo' : 'CONTABILIDAD';
+    h = '<div class="hero"><h1>¡Hola, ' + primerNombre() + '! 👋</h1><p>Eres: <b>' + etiqueta + '</b></p>' +
+      '<div class="acciones">' + (u.rol === 'Operativo'
+        ? '<button class="btn blanco" data-act="ir" data-v="panel">📊 Panel revisión</button><button class="btn blanco" data-act="ir" data-v="reportes">📈 Reportes</button><button class="btn blanco" data-act="ir" data-v="leasing">🏘️ Cruce Leasing</button><button class="btn blanco" data-act="ir" data-v="alertas">⏰ Alertas</button>'
+        : '<button class="btn blanco" data-act="ir" data-v="panel">📒 Casos para registro</button><button class="btn blanco" data-act="ir" data-v="reportes">📈 Reportes</button>') + '</div></div>' +
+      '<div class="kpis">' + (u.rol === 'Operativo' ? '<div class="kpi rojo"><div class="n">' + (r.pendientes || 0) + '</div><div class="t">📊 Casos pendientes</div></div><div class="kpi"><div class="n">' + (r.hoy || 0) + '</div><div class="t">📋 Procesados hoy</div></div>' : '') +
+      '<div class="kpi verde"><div class="n">' + (r.aprobados || 0) + '</div><div class="t">✅ Aprobados</div></div></div>';
+  }
+  $('#vista').innerHTML = h;
+}
+
+/* ------------------------------ Formulario CDT ------------------------------ */
+function vFormulario() {
+  F = { cliente: '', idCliente: '', pais: '', valorCdt: 0, rendimientos: 0, vencimiento: '', formaPago: '' }; TOCADO = {};
+  var u = S.user;
+  var recientes = (S.resumen && S.resumen.recientes) || [];
+  $('#vista').innerHTML =
+    '<h1>Automatización CDT No Residentes</h1><p style="color:#666;margin:4px 0 18px">Oficina: <b>' + esc(u.oficina || '—') + '</b> | Usuario: <b>' + esc(u.nombre) + '</b></p>' +
+    '<form id="f-cdt" autocomplete="off" novalidate>' +
+    '<div class="card"><h3>Datos básicos del cliente</h3><div class="grid2">' +
+    campo('cliente', 'Nombre cliente *', '<input id="cliente" maxlength="120" placeholder="Nombre completo">') +
+    campo('idCliente', 'ID cliente *', '<input id="idCliente" maxlength="20" placeholder="Documento / pasaporte" inputmode="text">') + '</div>' +
+    campo('pais', 'País no residente *', '<input id="pais" list="lista-paises" placeholder="Escribe para buscar..."><datalist id="lista-paises">' + S.paises.map(function (p) { return '<option value="' + esc(p) + '">'; }).join('') + '</datalist>') + '</div>' +
+    '<div class="card"><h3>Inversión y rendimientos</h3><div class="grid2">' +
+    campo('valorCdt', 'Valor CDT ($) *', '<div class="pref"><span>$</span><input id="valorCdt" class="num" inputmode="numeric" placeholder="0"></div>') +
+    campo('rendimientos', 'Rendimientos ($) *', '<div class="pref"><span>$</span><input id="rendimientos" class="num" inputmode="numeric" placeholder="0"></div>') + '</div></div>' +
+    '<div id="caja-calc">' + cajaCalculo(calcular(0, 0, S.cfg.tarifaNoResidente, S.cfg.tarifaSistema), S.cfg.tarifaNoResidente) + '</div><div id="aviso-min"></div>' +
+    '<div class="card"><h3>Información adicional</h3><div class="grid2">' +
+    campo('vencimiento', 'Fecha próx. vencimiento (opcional)', '<input id="vencimiento" type="date" min="' + S.hoy + '">') +
+    campo('formaPago', 'Forma de pago *', '<select id="formaPago"><option value="">Selecciona...</option>' + S.formas.map(function (f) { return '<option>' + esc(f) + '</option>'; }).join('') + '</select>') + '</div></div>' +
+    '<div class="card"><h3>Contacto</h3><div class="grid2"><div class="campo"><label>Tu correo oficina</label><input readonly value="' + esc(u.email) + '"></div><div class="campo"><label>Tu nombre completo</label><input readonly value="' + esc(u.nombre) + '"></div></div></div>' +
+    '<div class="card"><h3>Validación en tiempo real</h3><ul class="chk" id="chk"></ul><div id="banner" class="banner no"></div></div>' +
+    '<div class="barra"><button type="button" class="btn sec" data-act="ir" data-v="inicio">Cancelar</button><button type="submit" class="btn rojo" id="enviar" disabled>Enviar a autorización</button></div></form>' +
+    '<div class="card" style="margin-top:22px"><h3>Últimos casos</h3>' + (recientes.length ? recientes.map(function (c) { return '<span class="chip ' + esc(c.status) + '" style="margin:3px" title="' + esc(c.cliente) + '">' + esc(c.id) + ' · ' + esc(c.status) + '</span>'; }).join('') : '<span style="color:#999">Aún no has ingresado casos.</span>') +
+    '<div class="barra"><button type="button" class="btn sec peq" data-act="ir" data-v="mis">Ver mis casos ingresados</button></div></div>';
+  $('#f-cdt').addEventListener('input', onInputForm);
+  $('#f-cdt').addEventListener('change', onInputForm);
+  $('#f-cdt').addEventListener('focusout', function (e) { if (e.target.id) { TOCADO[e.target.id] = true; revisar(); } });
+  $('#f-cdt').addEventListener('submit', enviarCaso);
+  revisar();
+}
+
+function campo(id, etiqueta, ctl) { return '<div class="campo" id="c-' + id + '"><label for="' + id + '">' + etiqueta + '</label>' + ctl + '<div class="msg"></div></div>'; }
+
+function onInputForm(e) {
+  var t = e.target, id = t.id;
+  if (id === 'valorCdt' || id === 'rendimientos') { t.value = fmtNum(t.value); F[id] = Number(soloDigitos(t.value)) || 0; }
+  else if (id) F[id] = t.value;
+  if (e.type === 'change') TOCADO[id] = true;
+  revisar();
+}
+
+function validar() {
+  var v = {}, hoy = S.hoy;
+  var n = (F.cliente || '').trim();
+  v.cliente = !n ? ['', 'Obligatorio'] : n.length < 3 ? ['warn', 'Incompleto'] : ['ok', 'Completo'];
+  var d = (F.idCliente || '').trim();
+  v.idCliente = !d ? ['', 'Obligatorio'] : !/^[A-Za-z0-9-]*$/.test(d) ? ['bad', 'Solo letras, números y guion'] : d.length < 4 ? ['warn', 'Mínimo 4 caracteres'] : ['ok', 'Válido'];
+  var p = (F.pais || '').trim().toLowerCase();
+  v.pais = !p ? ['', 'Selecciona un país'] : S.paises.some(function (x) { return x.toLowerCase() === p; }) ? ['ok', 'Seleccionado'] : ['warn', 'Elige un país de la lista'];
+  v.valorCdt = !F.valorCdt ? ['', 'Ingresa el valor'] : ['ok', 'Numérico'];
+  v.rendimientos = !F.rendimientos ? ['', 'Ingresa los rendimientos'] : F.valorCdt && F.rendimientos > F.valorCdt ? ['bad', 'No pueden superar el valor del CDT'] : !F.valorCdt ? ['warn', 'Ingresa primero el valor del CDT'] : ['ok', 'Numérico'];
+  v.vencimiento = !F.vencimiento ? ['ok', 'Opcional'] : F.vencimiento < hoy ? ['bad', 'Debe ser hoy o posterior'] : ['ok', 'Formato correcto'];
+  v.formaPago = F.formaPago ? ['ok', 'Elegida'] : ['', 'Selecciona una opción'];
+  return v;
+}
+
+var ETIQ = { cliente: 'Nombre', idCliente: 'ID', pais: 'País', valorCdt: 'Valor CDT', rendimientos: 'Rendimientos', vencimiento: 'Vencimiento', formaPago: 'Forma de pago' };
+
+function revisar() {
+  var v = validar(), todoOk = true;
+  Object.keys(v).forEach(function (k) {
+    var est = v[k][0], mostrar = est === 'ok' || TOCADO[k] || est === 'warn' && F[k];
+    if (est !== 'ok') todoOk = false;
+    var c = $('#c-' + k);
+    if (c) { c.className = 'campo ' + (mostrar ? (est === '' ? 'bad' : est) : ''); $('.msg', c).textContent = mostrar ? (est === 'ok' ? '✓ ' : '') + v[k][1] : ''; }
+  });
+  $('#chk').innerHTML = Object.keys(v).map(function (k) {
+    var est = v[k][0]; return '<li class="' + est + '">' + (est === 'ok' ? '✓' : est === 'bad' ? '✗' : '•') + ' ' + ETIQ[k] + ': ' + esc(v[k][1]) + '</li>';
+  }).join('');
+  var b = $('#banner');
+  b.className = 'banner ' + (todoOk ? 'ok' : 'no');
+  b.textContent = todoOk ? '✓ FORMULARIO VÁLIDO — Listo para enviar' : 'Completa los campos marcados para continuar';
+  $('#enviar').disabled = !todoOk;
+  var c2 = calcular(F.rendimientos || 0, F.valorCdt || 0, S.cfg.tarifaNoResidente, S.cfg.tarifaSistema);
+  pintarCalculo($('#caja-calc'), c2, S.cfg.tarifaNoResidente);
+  var min = S.cfg.montoMinimo;
+  $('#aviso-min').innerHTML = F.rendimientos && c2.rete20 < min ? '<div class="banner no">ℹ️ La retención calculada (' + money(c2.rete20) + ') es menor al monto mínimo de retención (' + money(min) + '). Leydi lo evaluará.</div>' : '';
+}
+
+function enviarCaso(e) {
+  e.preventDefault();
+  var btn = $('#enviar');
+  var c = calcular(F.rendimientos, F.valorCdt, S.cfg.tarifaNoResidente, S.cfg.tarifaSistema);
+  confirmar('Enviar a autorización', '<p>Cliente: <b>' + esc(F.cliente) + '</b></p><p>Diferencia a cobrar: <b>' + money(c.diferencia) + '</b></p><p>Una vez enviado no podrás editar el caso.</p>', 'Enviar', 'rojo').then(function (ok) {
+    if (!ok) return;
+    conCarga(btn, function () { return api('guardarCaso', F); }).then(function (r) {
+      return api('obtenerResumen').then(function (rs) { S.resumen = rs; return r; });
+    }).then(function (r) {
+      $('#vista').innerHTML = '<div class="card" style="text-align:center;padding:36px"><div style="font-size:54px">✅</div><h1>Caso ' + esc(r.id) + ' enviado</h1><p>Leydi recibió tu solicitud. Te llegará un correo con las instrucciones de pago cuando sea aprobado.</p>' +
+        '<div class="barra" style="justify-content:center"><button class="btn" data-act="ir" data-v="ingresar">Ingresar otro CDT</button><button class="btn sec" data-act="ir" data-v="mis">Ver mis casos</button></div></div>';
+      window.scrollTo(0, 0);
+    }).catch(function (er) { toast(er.message, 'err'); });
+  });
+}
+
+/* ------------------------------ Tablas de casos ------------------------------ */
+function chip(s) { return '<span class="chip ' + esc(s) + '">' + esc(s) + '</span>'; }
+
+function tablaCasos(casos, opts) {
+  opts = opts || {};
+  if (!casos.length) return '<div class="vacio">📭 No hay casos para mostrar</div>';
+  return '<div class="tabla-w"><table class="t"><thead><tr>' + (opts.seleccion ? '<th><input type="checkbox" id="sel-todos" title="Seleccionar pendientes"></th>' : '') +
+    '<th>ID caso</th><th>Cliente</th><th class="ocmov">País</th><th class="m">Rendim.</th><th class="m">Rete</th><th class="m ocmov">Diferencia</th><th>Estado</th><th class="ocmov">Ingreso</th></tr></thead><tbody>' +
+    casos.map(function (c) {
+      return '<tr class="clic" data-act="detalle" data-id="' + esc(c.id) + '">' + (opts.seleccion ? '<td>' + (c.status === 'Pendiente' ? '<input type="checkbox" class="sel" data-id="' + esc(c.id) + '">' : '') + '</td>' : '') +
+        '<td><b>#' + esc(c.id) + '</b></td><td>' + esc(c.cliente) + '</td><td class="ocmov">' + esc(c.pais) + '</td><td class="m">' + corto(c.rendimientos) + '</td><td class="m">' + corto(c.rete20) + '</td><td class="m ocmov">' + corto(c.diferencia) + '</td><td>' + chip(c.status) + '</td><td class="ocmov">' + fecha(c.fechaIngesta) + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+function vMisCasos() {
+  return api('listarMisCasos').then(function (casos) {
+    S.casos = casos;
+    $('#vista').innerHTML = '<h1>Mis casos</h1><p style="color:#666;margin:4px 0 16px">Toca un caso para ver el detalle e instrucciones de pago.</p><div class="card">' + tablaCasos(casos) + '</div>';
+  });
+}
+
+function vPanel() {
+  return api('listarCasos', {}).then(function (casos) { S.casos = casos; pintarPanel(); });
+}
+
+function filtrados() {
+  return (S.casos || []).filter(function (c) {
+    return (!S.filtros.estado || c.status === S.filtros.estado) && (!S.filtros.oficina || c.oficina === S.filtros.oficina) &&
+      (!S.filtros.desde || c.fechaIngesta >= S.filtros.desde) && (!S.filtros.hasta || c.fechaIngesta <= S.filtros.hasta);
+  });
+}
+
+function opcionesFiltro() {
+  var ofi = {}; (S.casos || []).forEach(function (c) { if (c.oficina) ofi[c.oficina] = 1; });
+  var estados = ['Pendiente', 'Aprobado', 'Pagado', 'Rechazado'];
+  return '<div class="filtros"><div class="campo"><label>Estado</label><select data-filtro="estado"><option value="">Todos</option>' + estados.map(function (e) { return '<option ' + (S.filtros.estado === e ? 'selected' : '') + '>' + e + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Oficina</label><select data-filtro="oficina"><option value="">Todas</option>' + Object.keys(ofi).sort().map(function (o) { return '<option ' + (S.filtros.oficina === o ? 'selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select></div>' +
+    '<div class="campo"><label>Desde</label><input type="date" data-filtro="desde" value="' + esc(S.filtros.desde || '') + '"></div>' +
+    '<div class="campo"><label>Hasta</label><input type="date" data-filtro="hasta" value="' + esc(S.filtros.hasta || '') + '"></div></div>';
+}
+
+function pintarPanel() {
+  var op = S.user.rol === 'Operativo', c = S.casos || [];
+  var pend = c.filter(function (x) { return x.status === 'Pendiente'; }).length, hoy = c.filter(function (x) { return x.fechaAprobacion === S.hoy; }).length;
+  var apr = c.filter(function (x) { return x.status === 'Aprobado' || x.status === 'Pagado'; }).length;
+  var lista = filtrados();
+  $('#vista').innerHTML = '<h1>' + (op ? 'Panel de revisión y autorización' : 'Casos listos para registro') + '</h1><p style="color:#666;margin:4px 0 0">' + esc(S.user.nombre) + (op ? ' | Operaciones Tributarias' : ' | Contabilidad') + '</p>' +
+    '<div class="kpis">' + (op ? '<div class="kpi rojo"><div class="n">' + pend + '</div><div class="t">📊 Pendientes</div></div><div class="kpi"><div class="n">' + hoy + '</div><div class="t">📋 Hoy</div></div>' : '') + '<div class="kpi verde"><div class="n">' + apr + '</div><div class="t">✅ Aprobados</div></div></div>' +
+    '<div class="card">' + opcionesFiltro() + '<div id="tabla-panel">' + tablaCasos(lista, { seleccion: op }) + '</div>' +
+    '<div class="barra"><button class="btn sec" data-act="csv">⬇ Descargar reporte</button>' + (op ? '<button class="btn verde" data-act="lote">Aprobar lote</button>' : '') + '<button class="btn sec" data-act="refrescar">⟳ Actualizar</button></div></div>';
+}
+
+/* ------------------------------ Detalle de caso ------------------------------ */
+function abrirDetalle(id) {
+  var v = document.createElement('div'); v.className = 'velo'; v.id = 'modal-det';
+  v.innerHTML = '<div class="modal"><div class="modal-h"><h2>Detalle caso #' + esc(id) + '</h2><button data-act="cerrar" aria-label="Cerrar">×</button></div><div class="modal-b">' + cargandoVista() + '</div></div>';
+  document.body.appendChild(v);
+  api('obtenerDetalleCaso', id).then(function (r) { pintarDetalle(v, r); }).catch(function (e) { v.remove(); toast(e.message, 'err'); });
+}
+
+function dato(k, val) { return '<div class="dato"><span>' + k + '</span><b>' + val + '</b></div>'; }
+
+function pintarDetalle(v, r) {
+  var c = r.caso, editable = S.user.rol === 'Operativo' && c.status === 'Pendiente', sis = r.config.tarifaSistema;
+  var pct = c.rendimientos ? Math.round(c.rete4 / c.rendimientos * 1000) / 10 : sis;
+  var calc = calcular(c.rendimientos, c.valorCdt, c.tarifa, pct);
+  calc.rete4 = c.rete4;
+  var cuerpo = '<h3>Cliente</h3>' + dato('Nombre', esc(c.cliente)) + dato('ID', esc(c.idCliente)) + dato('País', esc(c.pais)) + dato('Oficina', esc(c.oficina)) +
+    dato('Ingresado', esc(c.ingresadoPor) + ' | ' + fecha(c.fechaIngesta)) +
+    '<h3 style="margin-top:16px">Inversión y rendimientos</h3>' + dato('Valor CDT', money(c.valorCdt)) + dato('Rendimientos', money(c.rendimientos)) +
+    '<div style="margin-top:14px"></div>' +
+    cajaCalculo(calc, c.tarifa, { claro: true, titulo: 'Cálculo actual' + (editable ? ' (editable por Leydi)' : ''), tarifaSis: pct,
+      editable: editable ? '<div class="fila"><span>Tarifa a aplicar (%)</span><span><input id="d-tarifa" class="num" type="number" min="0" max="100" step="0.5" value="' + esc(c.tarifa) + '" style="width:90px;padding:8px;border:2px solid var(--azul);border-radius:8px;text-align:right"></span></div>' : '' }) +
+    '<h3>Autorización</h3><div class="grid2"><div class="campo"><label>Estado</label><div>' + chip(c.status) + '</div></div>' +
+    '<div class="campo"><label>Forma de pago</label>' + (editable ? '<select id="d-forma">' + S.formas.map(function (f) { return '<option ' + (f === c.formaPago ? 'selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select>' : '<b>' + esc(c.formaPago) + '</b>') + '</div>' +
+    '<div class="campo"><label>Vencimiento</label>' + (editable ? '<input id="d-venc" type="date" value="' + esc(c.vencimiento) + '">' : '<b>' + fecha(c.vencimiento) + '</b>') + '</div></div>' +
+    (c.notasOficina ? dato('Notas oficina', esc(c.notasOficina)) : '') +
+    '<div class="campo"><label>Notas' + (editable ? ' (obligatorias para rechazar)' : '') + '</label>' + (editable ? '<textarea id="d-notas" rows="3" maxlength="1000">' + esc(c.notasLeydi) + '</textarea>' : '<div>' + (esc(c.notasLeydi) || '—') + '</div>') + '</div>' +
+    (c.aprobadoPor ? dato(c.status === 'Rechazado' ? 'Rechazado por' : 'Aprobado por', esc(c.aprobadoPor) + ' | ' + fecha(c.fechaAprobacion)) : '') +
+    '<h3 style="margin-top:16px">Auditoría</h3><ul class="aud">' + (r.auditoria.length ? r.auditoria.map(function (a) { return '<li><b>' + esc(a.fecha) + '</b> | ' + esc(a.usuario) + ' — ' + esc(a.accion) + (a.detalle ? '<br><span style="color:#777">' + esc(a.detalle) + '</span>' : '') + '</li>'; }).join('') : '<li>Sin registros</li>') + '</ul>' +
+    (editable ? '<div id="d-banner" class="banner ok">✓ FORMULARIO VÁLIDO — Listo para autorizar</div>' : '');
+  var pie = editable
+    ? '<button class="btn sec" data-act="cerrar">Cancelar</button><button class="btn sec" data-act="resolver" data-a="guardar" data-id="' + esc(c.id) + '">Guardar ajustes</button><button class="btn rojo" data-act="resolver" data-a="rechazar" data-id="' + esc(c.id) + '">Rechazar</button><button class="btn verde" data-act="resolver" data-a="aprobar" data-id="' + esc(c.id) + '">Aprobar</button>'
+    : ((c.status === 'Aprobado' || c.status === 'Pagado') && S.user.rol !== 'Contabilidad' ? '<button class="btn" data-act="ir-pago" data-id="' + esc(c.id) + '">Ver instrucciones de pago</button>' : '') + '<button class="btn sec" data-act="cerrar">Cerrar</button>';
+  $('.modal', v).innerHTML = '<div class="modal-h"><h2>Detalle caso #' + esc(c.id) + '</h2><button data-act="cerrar" aria-label="Cerrar">×</button></div><div class="modal-b">' + cuerpo + '</div><div class="modal-p">' + pie + '</div>';
+  v.dataset.rete4 = c.rete4; v.dataset.rend = c.rendimientos; v.dataset.cdt = c.valorCdt;
+  var inp = $('#d-tarifa', v);
+  if (inp) inp.addEventListener('input', function () {
+    var t = Number(inp.value), ok = inp.value !== '' && t >= 0 && t <= 100;
+    $('#d-banner', v).className = 'banner ' + (ok ? 'ok' : 'err');
+    $('#d-banner', v).textContent = ok ? '✓ FORMULARIO VÁLIDO — Listo para autorizar' : '✗ La tarifa debe estar entre 0 y 100';
+    if (!ok) return;
+    var rend = Number(v.dataset.rend), r20 = Math.round(rend * t / 100);
+    pintarCalculo(v, { rete4: Number(v.dataset.rete4), rete20: r20, diferencia: r20 - Number(v.dataset.rete4), saldoNeto: Number(v.dataset.cdt) - r20 }, t);
+  });
+}
+
+function resolver(btn) {
+  var v = $('#modal-det'), a = btn.dataset.a, id = btn.dataset.id;
+  var datos = { tarifa: $('#d-tarifa', v).value, formaPago: $('#d-forma', v).value, vencimiento: $('#d-venc', v).value, notas: $('#d-notas', v).value };
+  var t = Number(datos.tarifa);
+  if (datos.tarifa === '' || !(t >= 0 && t <= 100)) return toast('La tarifa debe estar entre 0 y 100.', 'err');
+  if (a === 'rechazar' && !datos.notas.trim()) return toast('Escribe el motivo del rechazo en las notas.', 'err');
+  var txt = { aprobar: ['Aprobar caso ' + id, 'Se enviará un correo a la oficina con las instrucciones de pago.', 'Aprobar', 'verde'], rechazar: ['Rechazar caso ' + id, 'La oficina será notificada con tus notas.', 'Rechazar', 'rojo'], guardar: ['Guardar ajustes', 'Se registrarán los cambios en auditoría.', 'Guardar', ''] }[a];
+  var run = function () { return conCarga(btn, function () { return api('resolverCaso', id, a, datos); }).then(function () {
+    v.remove(); toast(a === 'aprobar' ? '✅ Caso aprobado y correo enviado' : a === 'rechazar' ? 'Caso rechazado' : 'Ajustes guardados', 'ok');
+    return Promise.all([api('listarCasos', {}), api('obtenerResumen')]).then(function (r) { S.casos = r[0]; S.resumen = r[1]; if (S.vista === 'panel') pintarPanel(); });
+  }).catch(function (e) { toast(e.message, 'err'); }); };
+  confirmar(txt[0], '<p>' + txt[1] + '</p>', txt[2], txt[3]).then(function (ok) { if (ok) run(); });
+}
+
+/* ------------------------------ Reportes / CSV ------------------------------ */
+function csvCelda(v) {
+  var s = String(v == null ? '' : v);
+  if (/^[=+\-@]/.test(s)) s = "'" + s;
+  return '"' + s.replace(/"/g, '""') + '"';
+}
+
+function descargarCsv(nombre, filas) {
+  var blob = new Blob(['﻿' + filas.map(function (f) { return f.map(csvCelda).join(';'); }).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nombre; document.body.appendChild(a); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+function csvCasos() {
+  var cab = ['ID Caso', 'Fecha Ingesta', 'Cliente', 'ID Cliente', 'País', 'Oficina', 'Valor CDT', 'Rendimientos', 'Rete4%', 'Rete20%', 'Diferencia', 'Saldo Neto', 'Tarifa%', 'Vencimiento', 'Forma Pago', 'Status', 'Aprobado Por', 'Fecha Aprobación'];
+  var filas = filtrados().map(function (c) { return [c.id, c.fechaIngesta, c.cliente, c.idCliente, c.pais, c.oficina, c.valorCdt, c.rendimientos, c.rete4, c.rete20, c.diferencia, c.saldoNeto, c.tarifa, c.vencimiento, c.formaPago, c.status, c.aprobadoPor, c.fechaAprobacion]; });
+  descargarCsv('AutoTrib_casos_' + S.hoy + '.csv', [cab].concat(filas));
+}
+
+function vReportes() {
+  return api('listarCasos', {}).then(function (casos) {
+    S.casos = casos;
+    var porEstado = {}, porOficina = {};
+    casos.forEach(function (c) {
+      porEstado[c.status] = (porEstado[c.status] || { n: 0, d: 0 }); porEstado[c.status].n++; porEstado[c.status].d += c.diferencia;
+      var o = c.oficina || '—'; porOficina[o] = porOficina[o] || { n: 0, d: 0 }; porOficina[o].n++; porOficina[o].d += c.diferencia;
+    });
+    var fila = function (m) { return Object.keys(m).sort().map(function (k) { return '<tr><td>' + chip(k) + '</td><td class="m">' + m[k].n + '</td><td class="m">' + money(m[k].d) + '</td></tr>'; }).join('') || '<tr><td colspan="3" class="vacio">Sin datos</td></tr>'; };
+    var filaO = function (m) { return Object.keys(m).sort().map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="m">' + m[k].n + '</td><td class="m">' + money(m[k].d) + '</td></tr>'; }).join('') || '<tr><td colspan="3" class="vacio">Sin datos</td></tr>'; };
+    $('#vista').innerHTML = '<h1>Reportes</h1><p style="color:#666;margin:4px 0 16px">Generado el ' + fecha(S.hoy) + ' por ' + esc(S.user.nombre) + '</p>' +
+      '<div class="grid2"><div class="card"><h3>Por estado</h3><div class="tabla-w"><table class="t"><thead><tr><th>Estado</th><th class="m">Casos</th><th class="m">Diferencia</th></tr></thead><tbody>' + fila(porEstado) + '</tbody></table></div></div>' +
+      '<div class="card"><h3>Por oficina</h3><div class="tabla-w"><table class="t"><thead><tr><th>Oficina</th><th class="m">Casos</th><th class="m">Diferencia</th></tr></thead><tbody>' + filaO(porOficina) + '</tbody></table></div></div></div>' +
+      '<div class="barra"><button class="btn" data-act="csv">⬇ Descargar Excel (CSV)</button><button class="btn sec" data-act="imprimir">🖨 Imprimir / Guardar PDF</button></div>';
+  });
+}
+
+/* ------------------------------ Leasing ------------------------------ */
+var XLSX_URL = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+var PREVIA = null;
+
+function cargarXlsx() {
+  if (window.XLSX) return Promise.resolve();
+  return new Promise(function (ok, ko) { var s = document.createElement('script'); s.src = XLSX_URL; s.onload = ok; s.onerror = function () { ko(new Error('No se pudo cargar el lector de Excel. Usa un archivo CSV.')); }; document.head.appendChild(s); });
+}
+
+function vLeasing() {
+  PREVIA = null;
+  return api('obtenerLeasing').then(function (rep) { S.lote = rep; pintarLeasing(); });
+}
+
+function pintarLeasing(msgValid) {
+  var rep = S.lote || { registros: [], resumen: { total: 0, conciliados: 0, discrepancias: 0, exactitud: 0 }, errores: [] }, r = rep.resumen;
+  $('#vista').innerHTML = '<h1>Cruce de cuentas — Leasing habitacional</h1>' +
+    '<div class="card"><div class="barra" style="margin:0 0 12px"><button class="btn sec" data-act="plantilla">📥 Descargar template</button><button class="btn" data-act="subir">📤 Subir Excel experto contable</button></div>' +
+    '<input type="file" id="archivo" accept=".xlsx,.xls,.csv" class="oculto">' +
+    '<p style="color:#666;font-size:13px">Columnas: # Cuenta, # Crédito, # Recibo, Valor Operativo, Valor Contabilidad. El # Recibo es la clave del cruce.</p>' +
+    '<div id="previa">' + (msgValid || '') + '</div><div style="font-size:13px;color:#666;margin-top:8px">Última carga: <b>' + esc(rep.fechaCarga || 'Sin cargas') + '</b></div></div>' +
+    '<div class="card"><h3>Resultado del cruce</h3>' + tablaLeasing(rep.registros) + '</div>' +
+    '<div class="kpis"><div class="kpi"><div class="n">' + r.total + '</div><div class="t">Total registros</div></div><div class="kpi verde"><div class="n">' + r.conciliados + '</div><div class="t">Conciliados ✓</div></div><div class="kpi rojo"><div class="n">' + r.discrepancias + '</div><div class="t">Discrepancias ⚠️</div></div><div class="kpi"><div class="n">' + r.exactitud + '%</div><div class="t">% Exactitud</div></div></div>' +
+    (rep.errores && rep.errores.length ? '<div class="banner err">Filas omitidas:<br>' + rep.errores.slice(0, 10).map(esc).join('<br>') + (rep.errores.length > 10 ? '<br>… y ' + (rep.errores.length - 10) + ' más' : '') + '</div>' : '') +
+    '<div class="card"><h3>Próxima acción</h3><div class="campo"><label>Notas</label><textarea id="l-notas" rows="2" maxlength="500"></textarea></div>' +
+    '<div class="barra"><button class="btn rojo" data-act="leasing" data-a="incidente">Reportar incidente</button><button class="btn sec" data-act="leasing" data-a="rectificar">Rectificar</button><button class="btn verde" data-act="leasing" data-a="listo">Listo</button><button class="btn sec" data-act="csv-leasing">⬇ Exportar resultados</button></div></div>';
+  var f = $('#archivo'); if (f) f.addEventListener('change', leerArchivo);
+}
+
+function tablaLeasing(regs) {
+  if (!regs.length) return '<div class="vacio">Aún no hay cruces. Sube el archivo del experto contable.</div>';
+  return '<div class="tabla-w"><table class="t"><thead><tr><th>Cuenta</th><th>Recibo</th><th class="m">Ope ($)</th><th class="m">Cont ($)</th><th class="m">Dif ($)</th><th class="m">Dif (%)</th><th>Estado</th></tr></thead><tbody>' +
+    regs.map(function (x) {
+      var p = (Number(x.variacion) * 100); return '<tr><td>' + esc(x.cuenta) + '</td><td>' + esc(x.recibo) + '</td><td class="m">' + corto(x.valorOperativo) + '</td><td class="m">' + corto(x.valorContabilidad) + '</td><td class="m ' + (x.diferencia < 0 ? 'neg' : x.diferencia > 0 ? 'pos' : '') + '">' + (x.diferencia > 0 ? '+' : '') + corto(x.diferencia) + '</td><td class="m">' + (p > 0 ? '+' : '') + p.toFixed(1) + '%</td><td>' + chip(x.estado) + (x.estado === 'Discrepancia' ? ' ⚠️' : x.estado === 'Conciliado' ? ' ✓' : '') + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+function normCab(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]/g, ''); }
+
+function leerArchivo(e) {
+  var file = e.target.files[0]; if (!file) return;
+  if (file.size > 8 * 1024 * 1024) return toast('El archivo supera 8 MB.', 'err');
+  $('#previa').innerHTML = cargandoVista('Leyendo archivo...');
+  cargarXlsx().then(function () { return file.arrayBuffer(); }).then(function (buf) {
+    var wb = window.XLSX.read(buf, { type: 'array' });
+    var filas = window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '', raw: true });
+    if (filas.length < 2) throw new Error('El archivo no tiene registros.');
+    var map = {}; filas[0].forEach(function (h, i) { map[normCab(h)] = i; });
+    var col = function () { for (var i = 0; i < arguments.length; i++) if (map[arguments[i]] != null) return map[arguments[i]]; return -1; };
+    var idx = { cuenta: col('cuenta'), credito: col('credito'), recibo: col('recibo'), valorOperativo: col('valoroperativo', 'valorop', 'operativo'), valorContabilidad: col('valorcontabilidad', 'valorcont', 'contabilidad') };
+    var faltan = Object.keys(idx).filter(function (k) { return idx[k] < 0 && k !== 'valorContabilidad'; });
+    var datos = filas.slice(1).filter(function (f) { return f.some(function (c) { return String(c).trim() !== ''; }); }).map(function (f) {
+      var o = {}; Object.keys(idx).forEach(function (k) { o[k] = idx[k] >= 0 ? f[idx[k]] : ''; }); return o;
+    });
+    var vistos = {}, dup = 0, sinRecibo = 0, noNum = 0;
+    datos.forEach(function (d) { var r = String(d.recibo).trim(); if (!r) sinRecibo++; else if (vistos[r]) dup++; vistos[r] = 1; if (isNaN(parseFloat(String(d.valorOperativo).replace(/[^0-9.\-]/g, '')))) noNum++; });
+    var chk = function (ok, t) { return '<li class="' + (ok ? 'ok' : 'bad') + '">' + (ok ? '✓' : '✗') + ' ' + t + '</li>'; };
+    var todoOk = !faltan.length && !sinRecibo && !dup && !noNum && datos.length;
+    PREVIA = todoOk ? datos : null;
+    $('#previa').innerHTML = '<h3 style="margin-top:6px">Validaciones — ' + esc(file.name) + '</h3><ul class="chk">' +
+      chk(!faltan.length, 'Formato correcto' + (faltan.length ? ' (faltan: ' + faltan.join(', ') + ')' : '')) + chk(!sinRecibo, '# Recibo presente en todos los registros') + chk(!dup, 'Sin # Recibo duplicados') + chk(!noNum, 'Valores operativos numéricos') + chk(datos.length > 0, datos.length + ' registros leídos') + '</ul>' +
+      '<div class="barra"><button class="btn rojo" data-act="procesar-cruce" ' + (todoOk ? '' : 'disabled') + '>Procesar cruce</button></div>';
+  }).catch(function (er) { $('#previa').innerHTML = '<div class="banner err">' + esc(er.message) + '</div>'; });
+  e.target.value = '';
+}
+
+/* ------------------------------ Alertas ------------------------------ */
+function vAlertas() {
+  return api('listarAlertas').then(function (l) {
+    $('#vista').innerHTML = '<h1>Alertas de vencimiento</h1><p style="color:#666;margin:4px 0 16px">El sistema avisa a la oficina ' + 5 + ' días antes (revisión diaria 8:00 AM).</p><div class="card">' +
+      (l.length ? '<div class="tabla-w"><table class="t"><thead><tr><th>Caso</th><th>Cliente</th><th class="ocmov">Oficina</th><th>Vence</th><th class="m">Días</th><th>Estado</th></tr></thead><tbody>' +
+        l.sort(function (a, b) { return a.dias - b.dias; }).map(function (a) { return '<tr class="clic" data-act="detalle" data-id="' + esc(a.id) + '"><td><b>#' + esc(a.id) + '</b></td><td>' + esc(a.cliente) + '</td><td class="ocmov">' + esc(a.oficina) + '</td><td>' + fecha(a.vencimiento) + '</td><td class="m">' + a.dias + '</td><td>' + chip(a.status) + '</td></tr>'; }).join('') + '</tbody></table></div>'
+        : '<div class="vacio">✅ No hay vencimientos próximos</div>') + '</div>';
+  });
+}
+
+function vAlerta(id) {
+  return api('obtenerAlertaCaso', id).then(function (r) {
+    var c = r.caso, cerrado = c.status === 'Rechazado' || c.status === 'Pagado';
+    $('#vista').innerHTML = '<h1>Vencimiento CDT #' + esc(c.id) + '</h1><p style="color:#666;margin:4px 0 16px">' + (r.dias == null ? 'Sin fecha de vencimiento' : r.dias < 0 ? 'Venció hace ' + (-r.dias) + ' días' : 'Vence en ' + r.dias + ' día(s)') + '</p>' +
+      '<div class="card"><h3>Estado actual</h3>' + dato('Cliente', esc(c.cliente)) + dato('Monto', money(c.valorCdt)) + dato('Vencimiento', fecha(c.vencimiento)) + dato('Forma de pago', esc(c.formaPago)) + dato('Estado', chip(c.status)) + '</div>' +
+      (cerrado ? '<div class="banner no">Este caso ya no admite cambios.</div>' :
+        '<div class="card"><h3>' + (S.confirmarAlerta ? '✓ ¿Todo correcto? Confirma abajo' : 'Editar datos') + '</h3><div class="grid2"><div class="campo"><label>Fecha vencimiento</label><input type="date" id="a-venc" min="' + r.hoy + '" value="' + esc(c.vencimiento) + '"></div>' +
+        '<div class="campo"><label>Forma de pago</label><select id="a-forma">' + S.formas.map(function (f) { return '<option ' + (f === c.formaPago ? 'selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select></div></div>' +
+        '<div class="campo"><label>Notas</label><textarea id="a-notas" rows="3" maxlength="500">' + esc(c.notasOficina) + '</textarea></div>' +
+        '<div class="barra"><button class="btn rojo" data-act="alerta-guardar" data-id="' + esc(c.id) + '">✏️ Guardar cambios</button><button class="btn verde" data-act="alerta-ok" data-id="' + esc(c.id) + '">✓ Confirmar vencimiento</button></div></div>');
+  });
+}
+
+/* ------------------------------ Instrucciones de pago ------------------------------ */
+function pasosPago(c, k) {
+  var m = money(c.diferencia);
+  var base = {
+    'Débito': [
+      ['Paso 1: Verificar cuenta bancaria', ['Identifica el número de cuenta del cliente', 'Confirma que está en el sistema']],
+      ['Paso 2: Ingresar en sistema de débitos', ['Sección: Débitos y Transferencias', 'Número de cuenta del cliente digitado', 'Monto: ' + m, 'Concepto: Retención CDT No Residente']],
+      ['Paso 3: Procesar débito', ['Click en "Procesar Débito"', 'El sistema genera el comprobante automático', 'Guarda la referencia']],
+      ['Paso 4: Notificar al cliente', ['Envía email con el comprobante', 'Referencia: REC-' + c.id]]],
+    'Efectivo': [
+      ['Paso 1: Coordinar con Caja', ['Llama a Caja: Ext. ' + k.extCaja, 'Avisa: "Retención CDT por ' + m + '"']],
+      ['Paso 2: Cliente entrega el efectivo', ['El cliente se presenta con su ID', 'Caja recibe ' + m, 'Firma el comprobante']],
+      ['Paso 3: Registrar en el sistema', ['Vuelve a esta pantalla', 'Verifica cantidad, hora y firma', 'Click en "Confirmar pago realizado"']]],
+    'Transferencia': [
+      ['Paso 1: Solicitar información bancaria', ['Solicita por email al cliente su IBAN/SWIFT', 'Valida el banco internacional si corresponde']],
+      ['Paso 2: Generar orden de transferencia', ['Sistema genera la orden con referencia única (REC-' + c.id + ')', 'Monto: ' + m, 'Beneficiario: ' + c.cliente]],
+      ['Paso 3: Ejecutar transferencia', ['Procesa en el sistema de pagos internacionales', 'Guarda el comprobante SWIFT si aplica']],
+      ['Paso 4: Notificar al cliente', ['Email con comprobante de transferencia', 'Referencia de seguimiento', 'Tiempo estimado de entrega']]]
+  };
+  return base[c.formaPago] || [];
+}
+
+function vPago(id) {
+  return api('obtenerInstrucciones', id).then(function (r) {
+    var c = r.caso, k = r.contacto, pagado = c.status === 'Pagado', pasos = pasosPago(c, k);
+    $('#vista').innerHTML = '<h1>Instrucciones de pago — ' + esc(c.formaPago) + '</h1>' +
+      '<div class="card">' + dato('Caso', '#' + esc(c.id)) + dato('Cliente', esc(c.cliente)) + dato('Monto a cobrar', '<span style="color:var(--rojo)">' + money(c.diferencia) + '</span>') + dato('Vencimiento', fecha(c.vencimiento)) + '</div>' +
+      (pagado ? '<div class="banner ok">✓ Pago completado el ' + fecha(c.fechaPago) + '</div>' : '') +
+      pasos.map(function (p) { return '<div class="paso"><h3>' + esc(p[0]) + '</h3>' + p[1].map(function (t) { return '<label class="ck"><input type="checkbox" class="ck-pago" ' + (pagado ? 'checked disabled' : '') + '> ' + esc(t) + '</label>'; }).join('') + '</div>'; }).join('') +
+      '<div class="card"><h3>¿Necesitas ayuda?</h3><p>Contacta a: <b>' + esc(k.nombre) + '</b><br>Ext: ' + esc(k.ext) + ' | <a href="mailto:' + esc(k.email) + '">' + esc(k.email) + '</a></p></div>' +
+      (pagado ? '' : '<div class="barra"><button class="btn verde" id="btn-pago" data-act="pago-ok" data-id="' + esc(c.id) + '" disabled>Marcar como completado</button></div><p class="no-print" style="font-size:12px;color:#999">Marca todos los pasos para habilitar el botón.</p>');
+    $$('.ck-pago').forEach(function (cb) { cb.addEventListener('change', function () { var b = $('#btn-pago'); if (b) b.disabled = $$('.ck-pago').some(function (x) { return !x.checked; }); $$('.paso').forEach(function (p) { p.classList.toggle('hecho', $$('.ck-pago', p).every(function (x) { return x.checked; })); }); }); });
+  });
+}
+
+/* ------------------------------ Ayuda ------------------------------ */
+function vAyuda() {
+  var r = S.user.rol;
+  $('#vista').innerHTML = '<h1>Ayuda</h1><div class="card ayuda">' + (r === 'Oficina'
+    ? '<h3>Cómo ingresar un CDT</h3><ol><li>Entra a <b>Ingresar CDT</b> y completa nombre, ID, país, valor y rendimientos.</li><li>El cálculo de retenciones aparece automáticamente en el cuadro azul.</li><li>Cuando todos los campos estén en verde, pulsa <b>Enviar a autorización</b>.</li><li>Leydi revisa; recibirás un correo con las instrucciones de pago.</li><li>Sigue los pasos y marca <b>Completado</b>.</li></ol><p>🔴 Rojo: falta o inválido · 🟡 Amarillo: incompleto · 🟢 Verde: correcto.</p>'
+    : r === 'Operativo'
+      ? '<h3>Revisión y autorización</h3><ol><li>En <b>Panel revisión</b> filtra por estado, oficina o fechas.</li><li>Toca un caso para ver el detalle, ajustar la <b>tarifa %</b>, la forma de pago y las notas.</li><li><b>Aprobar</b> envía las instrucciones a la oficina; <b>Rechazar</b> exige notas.</li><li>Usa <b>Aprobar lote</b> para varios casos con sus condiciones actuales.</li><li>En <b>Cruce Leasing</b> descarga el template, sube el Excel y revisa discrepancias.</li></ol>'
+      : '<h3>Registro contable</h3><p>Aquí ves los casos aprobados y pagados. Usa los filtros y descarga el reporte para registrar en contabilidad.</p>') +
+    '<p style="color:#999">Si algo no funciona, contacta al administrador.</p></div>';
+}
+
+/* ------------------------------ Eventos ------------------------------ */
+document.addEventListener('click', function (e) {
+  var el = e.target.closest('[data-act]'); if (!el) return;
+  var a = el.dataset.act;
+  if (a === 'ir') ir(el.dataset.v);
+  else if (a === 'detalle') abrirDetalle(el.dataset.id);
+  else if (a === 'cerrar') { var m = $('#modal-det'); if (m) m.remove(); }
+  else if (a === 'resolver') resolver(el);
+  else if (a === 'ir-pago') { var m2 = $('#modal-det'); if (m2) m2.remove(); ir('pago', el.dataset.id); }
+  else if (a === 'refrescar') ir(S.vista);
+  else if (a === 'csv') csvCasos();
+  else if (a === 'imprimir') window.print();
+  else if (a === 'lote') {
+    var ids = $$('.sel:checked').map(function (x) { return x.dataset.id; });
+    if (!ids.length) return toast('Selecciona al menos un caso pendiente.', 'err');
+    confirmar('Aprobar lote', '<p>Se aprobarán <b>' + ids.length + '</b> casos con su tarifa y forma de pago actuales. Se enviará un correo por caso.</p>', 'Aprobar lote', 'verde').then(function (ok) {
+      if (!ok) return;
+      conCarga(el, function () { return api('aprobarLote', ids); }).then(function (r) {
+        toast(r.aprobados + ' aprobados' + (r.fallos.length ? ', ' + r.fallos.length + ' con error' : ''), r.fallos.length ? 'err' : 'ok'); ir('panel');
+      }).catch(function (er) { toast(er.message, 'err'); });
+    });
+  }
+  else if (a === 'plantilla') descargarCsv('Template_Leasing.csv', [['# Cuenta', '# Crédito', '# Recibo', 'Valor Operativo', 'Valor Contabilidad'], ['1001', 'CRD-001', 'REC-001', '1200000', '1200000']]);
+  else if (a === 'subir') $('#archivo').click();
+  else if (a === 'procesar-cruce') {
+    if (!PREVIA) return;
+    conCarga(el, function () { return api('cruzarDatos', PREVIA); }).then(function (rep) { S.lote = rep; PREVIA = null; pintarLeasing(); toast('Cruce completado', 'ok'); }).catch(function (er) { toast(er.message, 'err'); });
+  }
+  else if (a === 'leasing') {
+    var acc = el.dataset.a, nota = $('#l-notas').value;
+    confirmar('Confirmar acción', '<p>Se aplicará <b>' + esc(acc) + '</b> a las discrepancias del último cruce.</p>', 'Confirmar', acc === 'incidente' ? 'rojo' : '').then(function (ok) {
+      if (ok) conCarga(el, function () { return api('marcarLeasing', acc, nota); }).then(function (rep) { S.lote = rep; pintarLeasing(); toast('Estado actualizado', 'ok'); }).catch(function (er) { toast(er.message, 'err'); });
+    });
+  }
+  else if (a === 'csv-leasing') {
+    var regs = (S.lote && S.lote.registros) || [];
+    if (!regs.length) return toast('No hay resultados para exportar.', 'err');
+    descargarCsv('Cruce_Leasing_' + S.hoy + '.csv', [['# Cuenta', '# Crédito', '# Recibo', 'Valor Operativo', 'Valor Contabilidad', 'Diferencia', '% Variación', 'Estado']].concat(regs.map(function (x) { return [x.cuenta, x.credito, x.recibo, x.valorOperativo, x.valorContabilidad, x.diferencia, (x.variacion * 100).toFixed(1) + '%', x.estado]; })));
+  }
+  else if (a === 'pago-ok') {
+    confirmar('Confirmar pago', '<p>¿Confirmas que el pago fue realizado? Contabilidad será notificada.</p>', 'Confirmar', 'verde').then(function (ok) {
+      if (ok) conCarga(el, function () { return api('confirmarPago', el.dataset.id); }).then(function () { toast('Pago registrado', 'ok'); ir('pago', el.dataset.id); }).catch(function (er) { toast(er.message, 'err'); });
+    });
+  }
+  else if (a === 'alerta-guardar') {
+    conCarga(el, function () { return api('guardarAlertaCaso', el.dataset.id, { vencimiento: $('#a-venc').value, formaPago: $('#a-forma').value, notas: $('#a-notas').value }); })
+      .then(function () { toast('Cambios guardados. Leydi fue notificada.', 'ok'); S.confirmarAlerta = false; ir('alerta', el.dataset.id); }).catch(function (er) { toast(er.message, 'err'); });
+  }
+  else if (a === 'alerta-ok') {
+    conCarga(el, function () { return api('confirmarVencimientoCaso', el.dataset.id); }).then(function () { toast('Vencimiento confirmado ✓', 'ok'); }).catch(function (er) { toast(er.message, 'err'); });
+  }
+});
+
+document.addEventListener('change', function (e) {
+  var f = e.target.dataset && e.target.dataset.filtro;
+  if (f) { S.filtros[f] = e.target.value; $('#tabla-panel').innerHTML = tablaCasos(filtrados(), { seleccion: S.user.rol === 'Operativo' }); }
+  if (e.target.id === 'sel-todos') $$('.sel').forEach(function (c) { c.checked = e.target.checked; });
+});
+document.addEventListener('click', function (e) { if (e.target.closest('.sel') || e.target.id === 'sel-todos') e.stopPropagation(); }, true);
+
+arrancar();
+})();
+</script>

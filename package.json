@@ -1,0 +1,12 @@
+{
+  "name": "autotrib-noresidentes",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AutoTrib - No Residentes (Google Apps Script) · Banco Davivienda",
+  "scripts": {
+    "test": "node tests/servidor.test.js",
+    "test:ui": "node tests/ui.test.js Oficina /tmp && node tests/ui.test.js Operativo /tmp",
+    "manual": "node docs/generar-manual.js"
+  },
+  "devDependencies": { "playwright": "^1.56.1" }
+}
