@@ -4,6 +4,7 @@ const E = crearEntorno();
 const c = E.ctx;
 let pasadas = 0;
 function t(nombre, fn) { try { fn(); pasadas++; console.log('  ✓', nombre); } catch (e) { console.error('  ✗', nombre, '\n   ', e.message); process.exitCode = 1; } }
+function esperar() { const f = Date.now() + 3; while (Date.now() < f); } // lotes distintos entre cargas consecutivas
 function como(email) { E.estado.email = email; }
 function sinErrores(fn, texto) { assert.throws(fn, texto); }
 
@@ -121,7 +122,7 @@ t('oficina edita desde la alerta → Modificada + aviso a Operativo', () => {
 console.log('Leasing');
 t('cruce: conciliado y discrepancias con % correctos', () => {
   como('leydi@dav.com.co');
-  const rep = c.cruzarDatos([
+  esperar(); const rep = c.cruzarDatos([
     { cuenta: 1001, credito: 'CRD-001', recibo: 'REC-001', valorOperativo: 1200000, valorContabilidad: 1200000 },
     { cuenta: 1002, credito: 'CRD-002', recibo: 'REC-002', valorOperativo: 850000, valorContabilidad: 800000 },
     { cuenta: 1003, credito: 'CRD-003', recibo: 'REC-003', valorOperativo: '2.500.000', valorContabilidad: '2,600,000' }
@@ -132,12 +133,12 @@ t('cruce: conciliado y discrepancias con % correctos', () => {
   assert.strictEqual(por['REC-003'].diferencia, 100000); assert.ok(Math.abs(por['REC-003'].variacion * 100 - 4) < 0.01);
 });
 t('duplicados y recibos vacíos se reportan', () => {
-  const rep = c.cruzarDatos([{ cuenta: 1, credito: 'a', recibo: 'R9', valorOperativo: 10, valorContabilidad: 10 }, { cuenta: 1, credito: 'a', recibo: 'R9', valorOperativo: 10, valorContabilidad: 10 }, { cuenta: 2, credito: 'b', recibo: '', valorOperativo: 5, valorContabilidad: 5 }]);
+  esperar(); const rep = c.cruzarDatos([{ cuenta: 1, credito: 'a', recibo: 'R9', valorOperativo: 10, valorContabilidad: 10 }, { cuenta: 1, credito: 'a', recibo: 'R9', valorOperativo: 10, valorContabilidad: 10 }, { cuenta: 2, credito: 'b', recibo: '', valorOperativo: 5, valorContabilidad: 5 }]);
   assert.strictEqual(rep.errores.length, 2); assert.strictEqual(rep.resumen.total, 1);
 });
 t('marcar incidente actualiza estado y avisa', () => {
   const antes = E.correos.length;
-  const rep = c.cruzarDatos([{ cuenta: 5, credito: 'c', recibo: 'R50', valorOperativo: 100, valorContabilidad: 90 }]);
+  esperar(); const rep = c.cruzarDatos([{ cuenta: 5, credito: 'c', recibo: 'R50', valorOperativo: 100, valorContabilidad: 90 }]);
   const r2 = c.marcarLeasing('incidente', 'revisar');
   assert.strictEqual(r2.registros.find(x => x.recibo === 'R50').estado, 'Incidente'); assert.ok(E.correos.length > antes);
 });
