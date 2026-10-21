@@ -47,7 +47,7 @@ Si falta alguno aparece un error del tipo `... is not defined` o `No se encontr�
 
 1. Crea un **Google Sheet** vacío y abre `Extensiones → Apps Script`.
 2. Copia los 5 archivos de `dist/` como indica la tabla.
-3. Ejecuta **`inicializarSistema`** y acepta los permisos (Sheets, correo, Drive, activadores). Crea las 7 hojas, datos base y el trigger diario.
+3. Ejecuta **`inicializarSistema`** y acepta los permisos (Sheets, correo, Drive, activadores; el manifiesto no fija permisos, Apps Script los detecta solo). Crea las 7 hojas, datos base y el trigger diario.
 4. Hoja **ACCESOS**: deja a Leydi como Operativo y ajusta tu nombre. Hoja **CONFIG**: tarifas, correos e imágenes.
 5. `Implementar → Nueva implementación → Aplicación web`: ejecutar como **Yo**, acceso **Cualquier usuario de tu organización**.
 6. Cada vez que cambies código: `Implementar → Administrar implementaciones → Editar → Nueva versión`.
