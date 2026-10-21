@@ -276,6 +276,11 @@ function confirmarPago(id) {
 
 /* ------------------------------ Página ------------------------------ */
 
+/** Incluye el contenido de otro archivo HTML del proyecto dentro de una plantilla. */
+function include(nombre) {
+  return HtmlService.createHtmlOutputFromFile(nombre).getContent();
+}
+
 /** Genera la página principal (SPA) inyectando parámetros de deep-link. */
 function crearHTML(params) {
   var t = HtmlService.createTemplateFromFile('Index');

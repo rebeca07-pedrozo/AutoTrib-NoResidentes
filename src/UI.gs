@@ -6,7 +6,4 @@
  * Se separan para poder incluirlos con include() y mantener cada archivo legible.
  */
 
-/** Incluye el contenido de otro archivo HTML del proyecto dentro de una plantilla. */
-function include(nombre) {
-  return HtmlService.createHtmlOutputFromFile(nombre).getContent();
-}
+// include() vive en Code.gs para que la app arranque aunque este archivo falte.
