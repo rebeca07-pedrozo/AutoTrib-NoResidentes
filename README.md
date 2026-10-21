@@ -20,7 +20,7 @@ Solo hay **3 roles**. También están en la hoja **ROLES** del Sheet y en la lis
 
 ## Imágenes de marca (por ID de Drive)
 
-En la hoja **CONFIG** pega el **ID** (o el enlace completo) de cada archivo de Google Drive; si queda vacío se usan el diseño rojo y triángulos por defecto.
+En la hoja **CONFIG** (o, alternativamente, en *Propiedades de script* del editor de Apps Script, con el mismo nombre del parámetro) pega el **ID** (o el enlace completo) de cada archivo de Google Drive; si queda vacío se usan el diseño rojo y triángulos por defecto.
 
 | Parámetro en CONFIG | Dónde se ve |
 |---|---|

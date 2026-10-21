@@ -128,6 +128,11 @@ function obtenerConfig() {
   var out = {};
   CONFIG_BASE.forEach(function (c) {
     var v = porNombre[c[0]];
+    // Las propiedades de script (con el mismo nombre del parámetro) completan lo que esté vacío en CONFIG
+    if ((v === undefined || v === '') && typeof c[1] !== 'number') {
+      var p = PropertiesService.getScriptProperties().getProperty(c[0]);
+      if (p) v = p;
+    }
     if (typeof c[1] === 'number') out[c[2]] = (v === undefined || v === '') ? c[1] : Number(v);
     else out[c[2]] = v === undefined ? c[1] : String(v).trim();   // texto vacío es válido (p. ej. sin imagen)
   });

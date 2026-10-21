@@ -127,6 +127,11 @@ t('IDs de Drive → data URI, se cachean, y enlaces completos funcionan', () => 
   assert.ok(im.triangulos.startsWith('data:image/png;base64,')); assert.strictEqual(im.bienvenida, '');
   assert.strictEqual(JSON.parse(JSON.stringify(E2.ctx.imagenesIniciales_())).logo, '');
 });
+t('IDs en Propiedades de script también funcionan', () => {
+  const E3 = crearEntorno({ props: { 'ID Imagen Logo': 'LOGO_DESDE_PROPIEDADES_1' } });
+  E3.ctx.inicializarSistema();
+  assert.strictEqual(E3.ctx.obtenerConfig().imgLogo, 'LOGO_DESDE_PROPIEDADES_1');
+});
 t('un ID inválido no llama a Drive', () => assert.strictEqual(c.imagenDataUri_("x'; DROP"), ''));
 
 console.log('Alertas');

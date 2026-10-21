@@ -40,7 +40,7 @@ function crearEntorno(opts) {
     SpreadsheetApp: { newDataValidation: () => { const v = { requireValueInList: () => v, setAllowInvalid: () => v, build: () => ({}) }; return v; }, getActiveSpreadsheet: () => libro, flush() {}, getUi() { throw new Error('sin UI'); } },
     Session: { getActiveUser: () => ({ getEmail: () => estado.email }), getEffectiveUser: () => ({ getEmail: () => 'owner@dav.com.co' }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
-    PropertiesService: { getScriptProperties: () => ({ getProperty: () => null, setProperty() {} }) },
+    PropertiesService: { getScriptProperties: () => ({ getProperty: k => (opts.props || {})[k] || null, setProperty() {} }) },
     MailApp: { sendEmail: m => correos.push(m) },
     Utilities: { base64Encode: b => Buffer.from(b).toString('base64'), formatDate: (d, tz, f) => {
       const p = n => String(n).padStart(2, '0');
