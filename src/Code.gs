@@ -45,7 +45,7 @@ function exigirUsuario_(rolesPermitidos) {
   if (APP.VALIDAR_DOMINIO && !new RegExp('@' + APP.DOMINIO.replace(/\./g, '\\.') + '$', 'i').test(email)) {
     throw new Error('Solo se permiten correos @' + APP.DOMINIO);
   }
-  var u = obtenerAcceso(email);
+  var u = obtenerOCrearAcceso(email);
   if (!u) throw new Error('Acceso denegado. Contacta al administrador.');
   if (rolesPermitidos && rolesPermitidos.indexOf(u.rol) < 0) throw new Error('Tu rol no permite esta acción.');
   return u;
@@ -280,6 +280,7 @@ function confirmarPago(id) {
 function crearHTML(params) {
   var t = HtmlService.createTemplateFromFile('Index');
   t.arranque = JSON.stringify(params || {}).replace(/</g, '\\u003c');
+  t.imagenes = JSON.stringify(imagenesIniciales_()).replace(/</g, '\\u003c');
   t.baseUrl = ScriptApp.getService().getUrl();
   return t.evaluate()
     .setTitle(APP.NOMBRE + ' | Davivienda')

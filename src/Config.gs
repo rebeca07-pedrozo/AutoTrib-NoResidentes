@@ -10,13 +10,13 @@ var APP = {
   DOMINIO: 'dav.com.co',
   VALIDAR_DOMINIO: false,   // true = solo correos @dav.com.co
   DIAS_ALERTA: 5,           // días antes del vencimiento para avisar
-  HORA_ALERTA: 8,           // hora diaria del trigger
-  LOGO_URL: ''              // URL pública de un logo (opcional) para los correos
+  HORA_ALERTA: 8            // hora diaria del trigger
 };
 
 var COLORES = {
-  AZUL: '#003D82',
-  ROJO: '#E41F13',
+  ROJO: '#E41F13',          // color predominante
+  ROJO_OSCURO: '#A9130A',
+  AZUL: '#003D82',          // acento secundario
   VERDE: '#1B5E20',
   BLANCO: '#FFFFFF',
   GRIS_CLARO: '#F5F5F5',
@@ -29,7 +29,8 @@ var HOJAS = {
   CDT: 'CASOS_CDT',
   LEASING: 'CASOS_LEASING',
   ALERTAS: 'ALERTAS',
-  AUDITORIA: 'AUDITORÍA'
+  AUDITORIA: 'AUDITORÍA',
+  ROLES: 'ROLES'
 };
 
 var ROLES = { OFICINA: 'Oficina', OPERATIVO: 'Operativo', CONTABILIDAD: 'Contabilidad' };
@@ -51,7 +52,22 @@ var CONFIG_BASE = [
   ['Correo Admin', 'admin@dav.com.co', 'correoAdmin'],
   ['Correo Contabilidad', 'contabilidad@dav.com.co', 'correoContabilidad'],
   ['Extensión Operativo', '2345', 'extOperativo'],
-  ['Extensión Caja', '1234', 'extCaja']
+  ['Extensión Caja', '1234', 'extCaja'],
+  ['Rol por defecto', 'Oficina', 'rolDefecto'],
+  ['ID Imagen Logo', '', 'imgLogo'],
+  ['ID Imagen Triángulos', '', 'imgTriangulos'],
+  ['ID Imagen Fondo Bienvenida', '', 'imgBienvenida'],
+  ['ID Imagen Fondo Carga', '', 'imgCarga']
+];
+
+/** Definición de roles (se vuelca a la hoja ROLES como referencia). */
+var ROLES_DEFINICION = [
+  ['Oficina', 'Por defecto para cualquier correo que no esté en ACCESOS como otro rol.',
+   'Ingresar CDT, ver solo SUS casos, ver instrucciones de pago, confirmar pago, editar fecha/forma de pago desde la alerta.'],
+  ['Operativo', 'Leydi y administradores. Se asigna a mano en ACCESOS.',
+   'Todo lo de Oficina sobre cualquier caso, más: aprobar/rechazar (individual y lote), cambiar tarifa %, cruce Leasing, alertas, reportes.'],
+  ['Contabilidad', 'Se asigna a mano en ACCESOS.',
+   'Solo lectura de casos Aprobados y Pagados, reportes y descarga. Recibe correos de casos listos para registro.']
 ];
 
 /** Cabeceras de cada hoja. En CASOS_CDT el orden coincide con CDT_CLAVES. */

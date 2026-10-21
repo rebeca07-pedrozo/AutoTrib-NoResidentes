@@ -1,12 +1,35 @@
-# 🏦 AutoTrib - No Residentes
+# AutoTrib - No Residentes
 
 Aplicación web (Google Apps Script + Google Sheets + Gmail) que automatiza el cálculo y la autorización de retenciones CDT para clientes no residentes en Banco Davivienda.
 
-| Actor | Rol en ACCESOS | Qué hace |
+## Roles (qué existe y qué puede hacer cada uno)
+
+Solo hay **3 roles**. También están en la hoja **ROLES** del Sheet y en la lista desplegable de la columna `rol` de **ACCESOS**, para que no se olviden.
+
+| Rol | Quién | Qué puede hacer |
 |---|---|---|
-| Subdirectores de oficina | `Oficina` | Ingresan el CDT; el sistema calcula Rete 4 % / Rete 20 % / diferencia / saldo neto en vivo |
-| Leydi Bernal | `Operativo` | Revisa, ajusta la tarifa %, aprueba/rechaza (individual o por lote), cruce Leasing, alertas, reportes |
-| Contabilidad | `Contabilidad` | Solo lectura de casos aprobados/pagados para registro |
+| **Oficina** | **Por defecto**: cualquier correo que entre y no esté en ACCESOS con otro rol | Ingresar CDT, ver solo SUS casos, ver instrucciones de pago, confirmar pago, editar fecha/forma de pago desde la alerta |
+| **Operativo** | Leydi y quien administre (se asigna a mano en ACCESOS) | Todo lo anterior sobre cualquier caso, más aprobar/rechazar (individual y por lote), cambiar tarifa %, cruce Leasing, alertas, reportes |
+| **Contabilidad** | Se asigna a mano en ACCESOS | Solo lectura de casos Aprobados y Pagados, reportes; recibe los correos de casos listos para registro |
+
+**Rol por defecto.** Quien abre la app por primera vez y no está en ACCESOS entra como **Oficina**: se agrega solo a ACCESOS (activo = Sí, nombre sacado del correo, oficina vacía) para que luego completes su nombre y oficina. Para dar otro rol, cambia la columna `rol` de esa fila.
+- Bloquear a alguien: pon `activo = No` en su fila.
+- Quitar el rol por defecto (solo entra quien esté en ACCESOS): deja vacía la celda de CONFIG → *Rol por defecto*.
+- El usuario que ejecuta `inicializarSistema()` queda como **Operativo** (cambia su nombre en ACCESOS, por ejemplo a Rebeca); agrega a Leydi con rol Operativo.
+- Como cualquier persona de la organización entra como Oficina, si necesitas lista cerrada usa la opción anterior o `APP.VALIDAR_DOMINIO` en Config.gs.
+
+## Imágenes de marca (por ID de Drive)
+
+En la hoja **CONFIG** pega el **ID** (o el enlace completo) de cada archivo de Google Drive; si queda vacío se usan el diseño rojo y triángulos por defecto.
+
+| Parámetro en CONFIG | Dónde se ve |
+|---|---|
+| ID Imagen Logo | Cabecera, pantalla de carga y correos |
+| ID Imagen Triángulos | Triángulos decorativos (cabecera, bienvenida, carga) |
+| ID Imagen Fondo Bienvenida | Fondo de la tarjeta "Hola, ..." |
+| ID Imagen Fondo Carga | Fondo de la pantalla que carga al abrir |
+
+El ID es el texto entre `/d/` y `/view` del enlace del archivo. Detalles: la cuenta que despliega la app debe poder abrir el archivo (los usuarios no necesitan permiso); máximo 2 MB por imagen (recomendado menos de 500 KB; PNG/JPG/SVG); se guardan en caché 6 horas, así que un cambio puede tardar en verse. Al actualizar el código, vuelve a autorizar los permisos (se agregó lectura de Drive) y ejecuta `inicializarSistema` otra vez: es seguro y solo agrega los parámetros nuevos.
 
 ## Estructura
 
@@ -18,10 +41,11 @@ src/
 ├── Sheets.gs         CRUD sobre Sheets + auditoría (no existe función de borrado)
 ├── Email.gs          correos HTML con branding
 ├── Alertas.gs        trigger diario 8 AM + edición/confirmación desde el enlace del correo
+├── Imagenes.gs       imágenes de marca por ID de Drive (caché, correos)
 ├── Leasing.gs        cruce por # Recibo, reporte de discrepancias, cierre del lote
 ├── UI.gs             include() para ensamblar la interfaz
 ├── Index.html        contenedor de la SPA
-├── Estilos.html      CSS (azul #003D82, rojo #E41F13, responsivo)
+├── Estilos.html      CSS (rojo Davivienda #E41F13 predominante, responsivo)
 └── Cliente.html      pantallas y validación en tiempo real
 tests/                pruebas del servidor (Node, Sheets simulado) y de UI (Playwright)
 docs/                 manual de usuario (PDF/MD)
@@ -73,14 +97,14 @@ Estados: `Pendiente → Aprobado → Pagado` o `Pendiente → Rechazado`. Nunca 
 
 ```bash
 npm install            # solo para la prueba de UI (Playwright)
-npm test               # 24 pruebas de lógica del servidor (roles, cálculo, correos, alertas, leasing)
+npm test               # 33 pruebas de lógica del servidor (roles, cálculo, correos, alertas, leasing)
 npm run test:ui        # formulario, validación en vivo y panel en Chromium (desktop + móvil)
 npm run manual         # regenera docs/Manual_Usuario_AutoTrib.pdf
 ```
 
 ## Notas y límites conocidos
 
-- **Logo:** se usa una marca tipográfica (🏦 DAVIVIENDA) porque no se incluyen activos oficiales. Para el logo real en correos define `APP.LOGO_URL` (URL pública) en Config.gs; en la interfaz cambia el bloque `.logo-marca` de `Cliente.html`.
+- **Logo y triángulos:** no se incluyen activos oficiales; sube los tuyos a Drive y pon el ID en CONFIG (ver arriba). Sin imágenes se usa la marca tipográfica y triángulos CSS.
 - **Formularios en correo:** Gmail no ejecuta formularios HTML; el botón "Editar datos" abre una pantalla de la propia aplicación (autenticada) con los campos editables.
 - **Excel de Leasing:** se lee en el navegador con SheetJS (cdnjs). Acepta `.xlsx/.xls/.csv`. Si el archivo no trae `Valor Contabilidad`, se usa el ya cargado para ese `# Recibo`.
 - **Cuota de correo:** `MailApp` permite ~1.500 destinatarios/día en Workspace (100 en cuentas gratuitas).

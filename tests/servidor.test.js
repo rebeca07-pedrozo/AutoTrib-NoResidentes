@@ -11,8 +11,8 @@ function sinErrores(fn, texto) { assert.throws(fn, texto); }
 c.inicializarSistema();
 console.log('Servidor');
 
-t('crea las 6 hojas', () => assert.deepStrictEqual(Object.keys(E.hojas).sort(), ['ACCESOS', 'ALERTAS', 'AUDITORÍA', 'CASOS_CDT', 'CASOS_LEASING', 'CONFIG'].sort()));
-t('acceso denegado a desconocidos', () => { como('x@otra.com'); const r = c.iniciarSesion(); assert.strictEqual(r.ok, false); });
+t('crea las 7 hojas (incluye ROLES)', () => assert.deepStrictEqual(Object.keys(E.hojas).sort(), ['ACCESOS', 'ALERTAS', 'AUDITORÍA', 'CASOS_CDT', 'CASOS_LEASING', 'CONFIG', 'ROLES'].sort()));
+t('validación de dominio (opcional) bloquea correos externos', () => { c.APP.VALIDAR_DOMINIO = true; como('x@otra.com'); assert.strictEqual(c.iniciarSesion().ok, false); c.APP.VALIDAR_DOMINIO = false; });
 t('usuario inactivo no entra', () => { E.hojas.ACCESOS.appendRow(['inactivo@dav.com.co', 'Ina', 'Oficina', 'No', '']); como('inactivo@dav.com.co'); assert.strictEqual(c.iniciarSesion().ok, false); });
 t('Oficina entra y recibe rol', () => { como('pepito@dav.com.co'); const r = c.iniciarSesion(); assert.ok(r.ok); assert.strictEqual(r.usuario.rol, 'Oficina'); });
 
@@ -93,6 +93,41 @@ t('XSS escapado en correos', () => {
   como('leydi@dav.com.co'); c.resolverCaso(x, 'aprobar', { tarifa: 20, formaPago: 'Débito' });
   const m = E.correos.filter(k => /Aprobado/.test(k.subject)).pop(); assert.ok(!/<script>alert/.test(m.htmlBody));
 });
+
+console.log('Roles y acceso por defecto');
+t('hoja ROLES define los 3 roles', () => assert.deepStrictEqual(E.hojas.ROLES.getRange(2, 1, 3, 1).getValues().map(f => f[0]), ['Oficina', 'Operativo', 'Contabilidad']));
+t('correo desconocido entra como Oficina y se registra en ACCESOS', () => {
+  como('maria.lopez@dav.com.co'); const r = c.iniciarSesion();
+  assert.ok(r.ok); assert.strictEqual(r.usuario.rol, 'Oficina'); assert.strictEqual(r.usuario.nombre, 'Maria Lopez');
+  assert.ok(E.hojas.ACCESOS.getDataRange().getValues().some(f => f[0] === 'maria.lopez@dav.com.co'));
+  assert.strictEqual(E.hojas.ACCESOS.getDataRange().getValues().filter(f => f[0] === 'maria.lopez@dav.com.co').length, 1);
+  c.iniciarSesion(); assert.strictEqual(E.hojas.ACCESOS.getDataRange().getValues().filter(f => f[0] === 'maria.lopez@dav.com.co').length, 1);
+});
+t('usuario por defecto no puede aprobar', () => { como('maria.lopez@dav.com.co'); sinErrores(() => c.resolverCaso('CDT001', 'aprobar', {}), /rol/); });
+t('"No" explícito sigue bloqueado', () => { como('inactivo@dav.com.co'); assert.strictEqual(c.iniciarSesion().ok, false); });
+t('Rol por defecto vacío = lista cerrada', () => {
+  const fila = E.hojas.CONFIG.getDataRange().getValues().findIndex(f => f[0] === 'Rol por defecto');
+  E.hojas.CONFIG.getRange(fila + 1, 2).setValue(''); como('nuevo@dav.com.co'); assert.strictEqual(c.iniciarSesion().ok, false);
+  E.hojas.CONFIG.getRange(fila + 1, 2).setValue('Oficina');
+});
+t('CONFIG existente se completa al re-ejecutar inicializarSistema', () => {
+  const antes = E.hojas.CONFIG.getLastRow(); E.hojas.CONFIG.filas.splice(antes - 2, 2); c.inicializarSistema();
+  assert.strictEqual(E.hojas.CONFIG.getLastRow(), antes);
+});
+
+console.log('Imágenes');
+t('sin IDs no hay imágenes ni errores', () => { como('leydi@dav.com.co'); assert.deepStrictEqual(JSON.parse(JSON.stringify(c.obtenerImagenes())), { triangulos: '', bienvenida: '' }); });
+const E2 = crearEntorno({ drive: { getFileById: id => { if (id === 'ID_NO_EXISTE_123') throw new Error('no existe'); return { getBlob: () => ({ getContentType: () => id.startsWith('PDF') ? 'application/pdf' : 'image/png', getBytes: () => [137, 80, 78, 71] }) }; } } });
+E2.ctx.inicializarSistema();
+t('IDs de Drive → data URI, se cachean, y enlaces completos funcionan', () => {
+  const set = (k, v) => { const i = E2.hojas.CONFIG.getDataRange().getValues().findIndex(f => f[0] === k); E2.hojas.CONFIG.getRange(i + 1, 2).setValue(v); };
+  set('ID Imagen Triángulos', 'https://drive.google.com/file/d/TRIANGULOS_ID_1234/view?usp=sharing'); set('ID Imagen Fondo Bienvenida', 'ID_NO_EXISTE_123'); set('ID Imagen Logo', 'PDF_NO_ES_IMAGEN_1');
+  E2.estado.email = 'owner@dav.com.co';
+  const im = JSON.parse(JSON.stringify(E2.ctx.obtenerImagenes()));
+  assert.ok(im.triangulos.startsWith('data:image/png;base64,')); assert.strictEqual(im.bienvenida, '');
+  assert.strictEqual(JSON.parse(JSON.stringify(E2.ctx.imagenesIniciales_())).logo, '');
+});
+t('un ID inválido no llama a Drive', () => assert.strictEqual(c.imagenDataUri_("x'; DROP"), ''));
 
 console.log('Alertas');
 t('alerta se envía una sola vez para vencimiento en 5 días', () => {

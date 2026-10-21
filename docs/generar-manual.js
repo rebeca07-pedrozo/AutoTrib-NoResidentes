@@ -21,7 +21,7 @@ body{font-family:Arial,sans-serif;color:#1d2733;font-size:12.5px;line-height:1.5
 .portada h1{color:#fff;margin:0;font-size:30px} h1{color:#003D82} h2{color:#003D82;border-bottom:2px solid #E41F13;padding-bottom:4px;margin-top:26px}
 h3{color:#003D82} figure{margin:12px 0;text-align:center;page-break-inside:avoid} img{max-width:100%;border:1px solid #ddd;border-radius:8px}
 figcaption{font-size:11px;color:#777} code{background:#f5f5f5;padding:1px 4px;border-radius:3px}
-</style></head><body><div class="portada"><div style="font-size:14px;letter-spacing:2px">🏦 BANCO DAVIVIENDA</div><h1>AutoTrib · No Residentes</h1><div>Manual de usuario</div></div>${html}</body></html>`;
+</style></head><body><div class="portada"><div style="font-size:14px;letter-spacing:2px">BANCO DAVIVIENDA</div><h1>AutoTrib · No Residentes</h1><div>Manual de usuario</div></div>${html}</body></html>`;
 (async () => {
   const b = await chromium.launch({ executablePath: process.env.CHROME_PATH || undefined });
   const p = await b.newPage(); await p.setContent(doc);

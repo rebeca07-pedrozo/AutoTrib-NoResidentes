@@ -4,6 +4,14 @@ const fs = require('fs'), path = require('path'), assert = require('assert');
 const src = p => fs.readFileSync(path.join(__dirname, '..', 'src', p), 'utf8');
 const rol = process.argv[2] || 'Oficina';
 const OUT = process.argv[3] || '/tmp';
+const CON_IMG = process.argv[4] === 'img';
+const svg = s => 'data:image/svg+xml;base64,' + Buffer.from(s).toString('base64');
+const IMG = CON_IMG ? {
+  logo: svg('<svg xmlns="http://www.w3.org/2000/svg" width="240" height="60"><text x="0" y="44" font-family="Arial" font-weight="bold" font-size="44" fill="#fff">davivienda</text></svg>'),
+  carga: svg('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"><rect width="1600" height="900" fill="#b00"/><circle cx="300" cy="200" r="300" fill="#fff" opacity=".12"/></svg>'),
+  triangulos: svg('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="300" viewBox="0 0 600 300"><polygon points="600,0 600,300 250,300" fill="#fff" opacity=".18"/><polygon points="600,60 600,300 420,300" fill="#fff" opacity=".25"/></svg>'),
+  bienvenida: svg('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="500"><rect width="1200" height="500" fill="#600"/><polygon points="0,500 400,0 800,500" fill="#fff" opacity=".15"/></svg>')
+} : { logo: '', carga: '', triangulos: '', bienvenida: '' };
 
 const casos = [
   { id: 'CDT001', fechaIngesta: '2026-10-15', cliente: 'Juan Pérez', idCliente: '123456', pais: 'Colombia', valorCdt: 5000000, rendimientos: 5000000, rete4: 200000, rete20: 1000000, diferencia: 800000, saldoNeto: 4000000, vencimiento: '2026-10-25', formaPago: 'Débito', status: 'Pendiente', tarifa: 20, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' },
@@ -14,6 +22,7 @@ const usuario = rol === 'Oficina' ? { email: 'pepito@dav.com.co', nombre: 'Pepit
 const mock = `
 window.__llamadas=[];
 const D=${JSON.stringify({ casos, usuario })};
+window.IMAGENES=${JSON.stringify({ logo: IMG.logo, carga: IMG.carga })};
 const R={
  iniciarSesion:()=>({ok:true,usuario:D.usuario,config:{tarifaNoResidente:20,tarifaSistema:4,montoMinimo:84000},paises:['Colombia','Estados Unidos','España'],formasPago:['Débito','Efectivo','Transferencia'],hoy:'2026-10-20',resumen:{pendientes:1,hoy:1,aprobados:1,total:2,recientes:[{id:'CDT002',cliente:'María',status:'Aprobado'}]}}),
  obtenerResumen:()=>({pendientes:1,hoy:1,aprobados:1,total:2,recientes:[]}),
@@ -21,9 +30,10 @@ const R={
  listarMisCasos:()=>D.casos, listarCasos:()=>D.casos,
  obtenerDetalleCaso:id=>({caso:D.casos.find(c=>c.id===id),auditoria:[{fecha:'15/10/2026 14:30',usuario:'Pepito García',accion:'ingesta',detalle:'Datos ingesta completos'}],config:{tarifaSistema:4}}),
  obtenerInstrucciones:id=>({caso:D.casos[1],contacto:{nombre:'Leydi Bernal',email:'leydi@dav.com.co',ext:'2345',extCaja:'1234'}}),
+ obtenerImagenes:()=>(${JSON.stringify({ triangulos: IMG.triangulos, bienvenida: IMG.bienvenida })}),
  resolverCaso:()=>({}), listarAlertas:()=>[], obtenerLeasing:()=>({registros:[],resumen:{total:0,conciliados:0,discrepancias:0,exactitud:0},errores:[],fechaCarga:''})
 };
-window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler') return ok=>({withFailureHandler:ko=>new Proxy({},{get:(_,fn)=>(...a)=>{window.__llamadas.push([fn,a]);setTimeout(()=>{try{ok(R[fn](...a))}catch(e){ko(e)}},30)}})}); }})}};
+window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler') return ok=>({withFailureHandler:ko=>new Proxy({},{get:(_,fn)=>(...a)=>{window.__llamadas.push([fn,a]);setTimeout(()=>{try{ok(R[fn](...a))}catch(e){ko(e)}},window.__retraso?4000:30)}})}); }})}};
 `;
 (async () => {
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">${src('Estilos.html')}</head><body><div id="app"></div><div id="toast-zona"></div><script>window.ARRANQUE={};</script><script>${mock}</script>${src('Cliente.html')}</body></html>`;
@@ -34,8 +44,8 @@ window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler
     const p = await b.newPage({ viewport: vp });
     p.on('pageerror', e => errores.push(e.message)); p.on('console', m => m.type() === 'error' && errores.push(m.text()));
     await p.goto('file://' + f);
-    await p.waitForSelector('.hero');
-    await p.screenshot({ path: `${OUT}/${rol}-${nombre}-inicio.png` });
+    await p.waitForSelector('.hero'); await p.waitForTimeout(500);
+    await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-inicio.png` });
     if (rol === 'Oficina') {
       await p.click('[data-v=ingresar]'); await p.waitForSelector('#f-cdt');
       assert.ok(await p.isDisabled('#enviar'), 'botón deshabilitado al inicio');
@@ -49,21 +59,22 @@ window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler
       await p.fill('#rendimientos', '6000000');
       assert.ok(await p.isDisabled('#enviar'), 'rendimientos > CDT bloquea');
       await p.fill('#rendimientos', '5000000');
-      await p.screenshot({ path: `${OUT}/${rol}-${nombre}-form.png`, fullPage: true });
+      await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-form.png`, fullPage: true });
       await p.click('#enviar'); await p.click('.velo [data-r="1"]'); await p.waitForSelector('text=enviado');
       assert.ok((await p.evaluate('window.__llamadas')).some(l => l[0] === 'guardarCaso'));
     } else {
       await p.click('[data-v=panel]'); await p.waitForSelector('table.t');
-      await p.screenshot({ path: `${OUT}/${rol}-${nombre}-panel.png` });
+      await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-panel.png` });
       await p.click('tr[data-id=CDT001]'); await p.waitForSelector('#d-tarifa');
       await p.fill('#d-tarifa', '15');
       assert.strictEqual(await p.textContent('.modal [data-c=rete20]'), '$ 750,000');
       assert.strictEqual(await p.textContent('.modal [data-c=diferencia]'), '$ 550,000');
-      await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${rol}-${nombre}-detalle.png` });
+      await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-detalle.png` });
       await p.fill('#d-tarifa', '150'); assert.ok((await p.textContent('#d-banner')).includes('entre 0 y 100'));
     }
     await p.close();
   }
+  { const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); await p.addInitScript(() => { window.__retraso = true; }); await p.goto('file://' + f); await p.waitForTimeout(5); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}splash.png` }); await p.close(); }
   await b.close();
   assert.deepStrictEqual(errores, [], 'errores de consola: ' + errores.join('; '));
   console.log('UI OK', rol);

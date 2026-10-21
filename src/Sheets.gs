@@ -27,7 +27,8 @@ function crearPestañas() {
     [HOJAS.CDT, CABECERAS.CDT],
     [HOJAS.LEASING, CABECERAS.LEASING],
     [HOJAS.ALERTAS, CABECERAS.ALERTAS],
-    [HOJAS.AUDITORIA, CABECERAS.AUDITORIA]
+    [HOJAS.AUDITORIA, CABECERAS.AUDITORIA],
+    [HOJAS.ROLES, ['Rol', 'Quién lo tiene', 'Qué puede hacer']]
   ];
   defs.forEach(function (d) {
     var h = wb.getSheetByName(d[0]) || wb.insertSheet(d[0]);
@@ -39,11 +40,17 @@ function crearPestañas() {
     }
   });
 
+  // CONFIG: agrega los parámetros que falten (seguro de re-ejecutar tras una actualización)
   var cfg = hoja(HOJAS.CONFIG);
-  if (cfg.getLastRow() < 2) {
-    cfg.getRange(2, 1, CONFIG_BASE.length, 2).setValues(CONFIG_BASE.map(function (c) { return [c[0], c[1]]; }));
-    cfg.setColumnWidth(1, 220);
-  }
+  var existentes = cfg.getLastRow() > 1 ? cfg.getRange(2, 1, cfg.getLastRow() - 1, 1).getValues().map(function (f) { return String(f[0]).trim(); }) : [];
+  var faltan = CONFIG_BASE.filter(function (c) { return existentes.indexOf(c[0]) < 0; });
+  if (faltan.length) cfg.getRange(cfg.getLastRow() + 1, 1, faltan.length, 2).setValues(faltan.map(function (c) { return [c[0], c[1]]; }));
+  cfg.setColumnWidth(1, 240);
+
+  // ROLES: referencia para no olvidar qué hace cada rol
+  var hr = hoja(HOJAS.ROLES);
+  hr.getRange(2, 1, ROLES_DEFINICION.length, 3).setValues(ROLES_DEFINICION);
+  hr.setColumnWidth(1, 120); hr.setColumnWidth(2, 380); hr.setColumnWidth(3, 620);
 
   var acc = hoja(HOJAS.ACCESOS);
   if (acc.getLastRow() < 2) {
@@ -54,6 +61,12 @@ function crearPestañas() {
       ['pepito@dav.com.co', 'Pepito García', ROLES.OFICINA, 'Sí', 'Bogotá Centro']
     ]);
   }
+
+  acc.getRange(2, 3, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInList([ROLES.OFICINA, ROLES.OPERATIVO, ROLES.CONTABILIDAD], true).setAllowInvalid(false).build());
+  acc.getRange(2, 4, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation()
+    .requireValueInList(['Sí', 'No'], true).setAllowInvalid(false).build());
+  acc.getRange(1, 3).setNote('Roles: Oficina (por defecto), Operativo (aprueba), Contabilidad (solo lectura). Ver hoja ROLES.');
 
   var fmtMoneda = '#,##0';
   var cdt = hoja(HOJAS.CDT);
@@ -115,12 +128,18 @@ function obtenerConfig() {
   var out = {};
   CONFIG_BASE.forEach(function (c) {
     var v = porNombre[c[0]];
-    out[c[2]] = (v === undefined || v === '') ? c[1] : (typeof c[1] === 'number' ? Number(v) : String(v));
+    if (typeof c[1] === 'number') out[c[2]] = (v === undefined || v === '') ? c[1] : Number(v);
+    else out[c[2]] = v === undefined ? c[1] : String(v).trim();   // texto vacío es válido (p. ej. sin imagen)
   });
   return out;
 }
 
-/** Busca un usuario activo en ACCESOS. Devuelve null si no existe o está inactivo. */
+function esActivo_(v) {
+  var a = String(v).trim().toLowerCase();
+  return ['no', 'false', 'inactivo', '0'].indexOf(a) < 0;   // solo un "No" explícito bloquea
+}
+
+/** Busca un usuario en ACCESOS. Devuelve null si no existe o está bloqueado (activo = No). */
 function obtenerAcceso(email) {
   if (!email) return null;
   var buscado = String(email).trim().toLowerCase();
@@ -128,14 +147,45 @@ function obtenerAcceso(email) {
   for (var i = 0; i < filas.length; i++) {
     var f = filas[i];
     if (String(f[0]).trim().toLowerCase() === buscado) {
-      var activo = String(f[3]).trim().toLowerCase();
-      if (activo !== 'sí' && activo !== 'si' && activo !== 'true') return null;
-      var rol = normalizarRol(f[2]);
+      if (!esActivo_(f[3])) return null;
+      var rol = normalizarRol(f[2]) || normalizarRol(obtenerConfig().rolDefecto);
       if (!rol) return null;
-      return { email: buscado, nombre: String(f[1]).trim() || buscado, rol: rol, oficina: String(f[4] || '').trim() };
+      return { email: buscado, nombre: String(f[1]).trim() || nombreDesdeCorreo_(buscado), rol: rol, oficina: String(f[4] || '').trim() };
     }
   }
   return null;
+}
+
+/**
+ * Acceso para el login: si el correo no está en ACCESOS recibe el rol por defecto
+ * (CONFIG → "Rol por defecto", normalmente Oficina) y se registra en ACCESOS para
+ * que el administrador pueda ajustar nombre y oficina. Un "No" explícito sigue bloqueado.
+ */
+function obtenerOCrearAcceso(email) {
+  var u = obtenerAcceso(email);
+  if (u) return u;
+  var buscado = String(email).trim().toLowerCase();
+  var h = hoja(HOJAS.ACCESOS);
+  var existe = h.getDataRange().getValues().slice(1).some(function (f) { return String(f[0]).trim().toLowerCase() === buscado; });
+  if (existe) return null;                                   // bloqueado explícitamente
+  var rol = normalizarRol(obtenerConfig().rolDefecto);
+  if (!rol) return null;                                     // rol por defecto vacío = solo lista cerrada
+  var nombre = nombreDesdeCorreo_(buscado);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    h.appendRow([buscado, nombre, rol, 'Sí', '']);
+  } finally {
+    lock.releaseLock();
+  }
+  registrarAuditoria(nombre, 'alta_automatica', '', 'Rol por defecto: ' + rol);
+  return { email: buscado, nombre: nombre, rol: rol, oficina: '' };
+}
+
+/** 'maria.lopez@dav.com.co' → 'Maria Lopez'. */
+function nombreDesdeCorreo_(email) {
+  return String(email).split('@')[0].split(/[._\-]+/).filter(String)
+    .map(function (p) { return p.charAt(0).toUpperCase() + p.slice(1); }).join(' ') || email;
 }
 
 function normalizarRol(r) {
@@ -150,8 +200,7 @@ function normalizarRol(r) {
 function correosPorRol(rol) {
   return hoja(HOJAS.ACCESOS).getDataRange().getValues().slice(1)
     .filter(function (f) {
-      var a = String(f[3]).trim().toLowerCase();
-      return normalizarRol(f[2]) === rol && (a === 'sí' || a === 'si' || a === 'true') && f[0];
+      return normalizarRol(f[2]) === rol && esActivo_(f[3]) && f[0];
     })
     .map(function (f) { return String(f[0]).trim(); });
 }

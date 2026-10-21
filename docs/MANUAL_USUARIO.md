@@ -1,6 +1,14 @@
 # Cómo entrar
 
-Abre el enlace que te compartió el administrador. El sistema identifica tu correo corporativo automáticamente; no hay usuario ni contraseña adicionales. Si ves **Acceso denegado**, tu correo no está activo en la lista de accesos: contacta al administrador.
+Abre el enlace que te compartió el administrador. El sistema identifica tu correo corporativo automáticamente; no hay usuario ni contraseña adicionales. Si es tu primera vez, entras automáticamente con el rol **Oficina**. Si ves **Acceso denegado**, tu acceso fue bloqueado: contacta al administrador.
+
+# Roles
+
+- **Oficina** (por defecto): ingresa CDT y ve solo sus casos.
+- **Operativo** (Leydi y administradores): aprueba, ajusta tarifa, Leasing, alertas y reportes.
+- **Contabilidad**: solo lectura de casos aprobados y pagados.
+
+El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada uno.
 
 ## Si eres Oficina
 
