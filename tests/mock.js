@@ -47,11 +47,13 @@ function crearEntorno(opts) {
       return f.replace('yyyy', d.getFullYear()).replace('MM', p(d.getMonth() + 1)).replace('dd', p(d.getDate())).replace('HH', p(d.getHours())).replace('mm', p(d.getMinutes())).replace('ss', p(d.getSeconds())).replace('SSS', String(d.getMilliseconds()).padStart(3, '0'));
     } },
     ScriptApp: {
+      getOAuthToken: () => 'token',
       getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' }),
       getProjectTriggers: () => triggers, deleteTrigger(t) { triggers.splice(triggers.indexOf(t), 1); },
       newTrigger: () => { const t = { getHandlerFunction: () => 'triggerDiarioAlertas', timeBased: () => t, everyDays: () => t, atHour: () => t, inTimezone: () => t, create: () => { triggers.push(t); } }; return t; }
     },
     HtmlService: {},
+    UrlFetchApp: { fetch: (u, o) => (opts.fetch || (() => ({ getResponseCode: () => 404 })))(u, o) },
     CacheService: { getScriptCache: () => cache },
     DriveApp: opts.drive || { getFileById: () => { throw new Error('sin Drive'); } }
   };

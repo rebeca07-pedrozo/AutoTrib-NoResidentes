@@ -132,6 +132,19 @@ t('IDs en Propiedades de script también funcionan', () => {
   E3.ctx.inicializarSistema();
   assert.strictEqual(E3.ctx.obtenerConfig().imgLogo, 'LOGO_DESDE_PROPIEDADES_1');
 });
+t('foto grande se reduce con miniatura; sin miniatura y >2MB se explica el motivo', () => {
+  const grande = { getContentType: () => 'image/jpeg', getBytes: () => new Array(3 * 1024 * 1024).fill(1) };
+  const mini = { getContentType: () => 'image/jpeg', getBytes: () => [1, 2, 3], };
+  const mk = conMini => crearEntorno({ drive: { getFileById: () => ({ getBlob: () => grande }) }, fetch: conMini ? (u) => u.includes('/drive/v3/') ? { getResponseCode: () => 200, getContentText: () => JSON.stringify({ thumbnailLink: 'https://x/y=s220' }) } : { getResponseCode: () => 200, getBlob: () => mini } : () => ({ getResponseCode: () => 403 }) });
+  const A = mk(true), B = mk(false);
+  assert.ok(A.ctx.leerImagen_('FOTO_GRANDE_ID_1234', 1600).motivo.startsWith('OK (reducida'));
+  assert.ok(/Pesa 3\.0 MB/.test(B.ctx.leerImagen_('FOTO_GRANDE_ID_1234', 1600).motivo));
+  assert.ok(/no es una imagen/.test(E2.ctx.leerImagen_('PDF_NO_ES_IMAGEN_1', 600).motivo));
+  assert.ok(/Drive no permite/.test(E2.ctx.leerImagen_('ID_NO_EXISTE_123', 600).motivo));
+});
+t('diagnosticarImagenes informa cada imagen', () => {
+  const txt = E2.ctx.diagnosticarImagenes(); assert.ok(/Logo \[PDF_NO_ES_IMAGEN_1\]: El archivo no es una imagen/.test(txt) && /Triángulos \[TRIANGULOS_ID_1234\]: OK/.test(txt));
+});
 t('un ID inválido no llama a Drive', () => assert.strictEqual(c.imagenDataUri_("x'; DROP"), ''));
 
 console.log('Paquete dist/');

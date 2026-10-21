@@ -20,6 +20,7 @@ function onOpen() {
     SpreadsheetApp.getUi().createMenu('AutoTrib')
       .addItem('1. Inicializar sistema', 'inicializarSistema')
       .addItem('2. Instalar alertas diarias (8 AM)', 'instalarTriggerDiario')
+      .addItem('Diagnosticar imágenes', 'diagnosticarImagenes')
       .addItem('Ejecutar alertas ahora', 'verificarVencimientos')
       .addToUi();
   } catch (err) { /* no hay UI (ejecución standalone) */ }

@@ -29,7 +29,7 @@ En la hoja **CONFIG** (o, alternativamente, en *Propiedades de script* del edito
 | ID Imagen Fondo Bienvenida | Fondo de la tarjeta "Hola, ..." |
 | ID Imagen Fondo Carga | Fondo de la pantalla que carga al abrir |
 
-El ID es el texto entre `/d/` y `/view` del enlace del archivo. Detalles: la cuenta que despliega la app debe poder abrir el archivo (los usuarios no necesitan permiso); máximo 2 MB por imagen (recomendado menos de 500 KB; PNG/JPG/SVG); se guardan en caché 6 horas, así que un cambio puede tardar en verse. Al actualizar el código, vuelve a autorizar los permisos (se agregó lectura de Drive) y ejecuta `inicializarSistema` otra vez: es seguro y solo agrega los parámetros nuevos.
+El ID es el texto entre `/d/` y `/view` del enlace del archivo. **Si no cargan: menú `AutoTrib → Diagnosticar imágenes`** (o ejecuta `diagnosticarImagenes` en el editor) y dice, imagen por imagen, qué leyó y por qué falló. Detalles: la cuenta que despliega la app debe poder abrir el archivo (los usuarios no necesitan permiso); las fotos pesadas (más de 700 KB) se reducen solas con la miniatura de Drive (máximo 2 MB tras reducir; PNG/JPG/SVG); se guardan en caché 6 horas, así que un cambio puede tardar en verse. Al actualizar el código, vuelve a autorizar los permisos (se agregó lectura de Drive) y ejecuta `inicializarSistema` otra vez: es seguro y solo agrega los parámetros nuevos.
 
 ## Instalación (5 archivos, ≈10 min)
 
