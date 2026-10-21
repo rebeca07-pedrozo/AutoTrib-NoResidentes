@@ -134,6 +134,15 @@ t('IDs en Propiedades de script también funcionan', () => {
 });
 t('un ID inválido no llama a Drive', () => assert.strictEqual(c.imagenDataUri_("x'; DROP"), ''));
 
+console.log('Paquete dist/');
+t('dist/ (5 archivos) arranca solo y funciona sin src/', () => {
+  const fs = require('fs'), path = require('path');
+  assert.deepStrictEqual(fs.readdirSync(path.join(__dirname, '..', 'dist')).sort(), ['Cliente.html', 'Codigo.gs', 'Estilos.html', 'Index.html', 'appsscript.json']);
+  const D = crearEntorno({ dist: true, email: 'leydi@dav.com.co' }); D.ctx.inicializarSistema();
+  assert.strictEqual(D.ctx.iniciarSesion().ok, true); assert.strictEqual(typeof D.ctx.include, 'function'); assert.strictEqual(typeof D.ctx.imagenesIniciales_, 'function');
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(D.ctx.imagenesIniciales_())), { logo: '', carga: '' });
+});
+
 console.log('Alertas');
 t('alerta se envía una sola vez para vencimiento en 5 días', () => {
   como('pepito@dav.com.co');

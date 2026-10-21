@@ -56,7 +56,7 @@ function crearEntorno(opts) {
     DriveApp: opts.drive || { getFileById: () => { throw new Error('sin Drive'); } }
   };
   vm.createContext(ctx);
-  const src = path.join(__dirname, '..', 'src');
+  const src = path.join(__dirname, '..', opts.dist ? 'dist' : 'src');
   fs.readdirSync(src).filter(f => f.endsWith('.gs')).forEach(f => vm.runInContext(fs.readFileSync(path.join(src, f), 'utf8'), ctx, { filename: f }));
   return { ctx, correos, hojas, estado, libro, run: code => vm.runInContext(code, ctx) };
 }

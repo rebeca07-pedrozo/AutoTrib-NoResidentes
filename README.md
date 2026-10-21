@@ -31,40 +31,32 @@ En la hoja **CONFIG** (o, alternativamente, en *Propiedades de script* del edito
 
 El ID es el texto entre `/d/` y `/view` del enlace del archivo. Detalles: la cuenta que despliega la app debe poder abrir el archivo (los usuarios no necesitan permiso); máximo 2 MB por imagen (recomendado menos de 500 KB; PNG/JPG/SVG); se guardan en caché 6 horas, así que un cambio puede tardar en verse. Al actualizar el código, vuelve a autorizar los permisos (se agregó lectura de Drive) y ejecuta `inicializarSistema` otra vez: es seguro y solo agrega los parámetros nuevos.
 
-## Estructura
+## Instalación (5 archivos, ≈10 min)
 
-```
-src/
-├── appsscript.json   manifiesto (zona America/Bogota, web app DOMAIN / USER_DEPLOYING)
-├── Config.gs         constantes, colores, cabeceras de hojas, países
-├── Code.gs           doGet, inicializarSistema, autenticación, API (ingesta, aprobación, pagos)
-├── Sheets.gs         CRUD sobre Sheets + auditoría (no existe función de borrado)
-├── Email.gs          correos HTML con branding
-├── Alertas.gs        trigger diario 8 AM + edición/confirmación desde el enlace del correo
-├── Imagenes.gs       imágenes de marca por ID de Drive (caché, correos)
-├── Leasing.gs        cruce por # Recibo, reporte de discrepancias, cierre del lote
-├── UI.gs             include() para ensamblar la interfaz
-├── Index.html        contenedor de la SPA
-├── Estilos.html      CSS (rojo Davivienda #E41F13 predominante, responsivo)
-└── Cliente.html      pantallas y validación en tiempo real
-tests/                pruebas del servidor (Node, Sheets simulado) y de UI (Playwright)
-docs/                 manual de usuario (PDF/MD)
-```
+**Todo lo que necesitas está en la carpeta `dist/`** (no uses `src/`, es el código fuente). Tiene exactamente 5 archivos:
 
-## Instalación en otro Google Workspace (≈10 min)
+| Archivo en `dist/` | Cómo crearlo en el editor de Apps Script |
+|---|---|
+| `Codigo.gs` | Pega todo su contenido en el archivo `Código.gs` que ya existe (borra lo que traía) |
+| `Index.html` | `+` → HTML → nombre `Index` |
+| `Estilos.html` | `+` → HTML → nombre `Estilos` |
+| `Cliente.html` | `+` → HTML → nombre `Cliente` |
+| `appsscript.json` | Configuración del proyecto → marca *Mostrar "appsscript.json"* → pega su contenido |
 
-1. Crea un **Google Sheet** vacío (ej. `AutoTrib-NoResidentes`). `Extensiones → Apps Script`.
-2. Copia cada archivo de `src/` al proyecto (`.gs` como script, `.html` como HTML con el mismo nombre sin extensión). En `Configuración del proyecto` marca **Mostrar "appsscript.json"** y pega el de `src/`.
-   *Alternativa con [clasp](https://github.com/google/clasp):* `clasp login && clasp create --type sheets --rootDir src && clasp push`.
-3. Ejecuta **`inicializarSistema`** (o el menú `AutoTrib → 1. Inicializar sistema` al recargar el Sheet) y acepta los permisos. Esto crea las 6 hojas, datos base y el trigger diario.
-4. Hoja **ACCESOS**: reemplaza los usuarios de ejemplo por los reales (`email | nombre | rol | activo | oficina`). Roles: `Oficina`, `Operativo`, `Contabilidad`; activo: `Sí`.
-5. Hoja **CONFIG**: ajusta tarifas, `Correo Admin`, `Correo Contabilidad` y extensiones telefónicas.
-6. `Implementar → Nueva implementación → Aplicación web`:
-   - Ejecutar como: **Yo** (propietario).
-   - Quién tiene acceso: **Cualquier usuario de tu organización** (necesario para que `Session.getActiveUser()` devuelva el correo del visitante).
-7. Comparte la URL `/exec` con los usuarios. Los enlaces de los correos usan esa misma URL automáticamente.
+Si falta alguno aparece un error del tipo `... is not defined` o `No se encontró el archivo`. En el editor deben verse **exactamente** 4 archivos más el manifiesto: `Código.gs`, `Index`, `Estilos`, `Cliente`.
 
-> Cada vez que cambies código: `Implementar → Administrar implementaciones → Editar → Nueva versión`, para que los usuarios vean el cambio con la misma URL.
+1. Crea un **Google Sheet** vacío y abre `Extensiones → Apps Script`.
+2. Copia los 5 archivos de `dist/` como indica la tabla.
+3. Ejecuta **`inicializarSistema`** y acepta los permisos (Sheets, correo, Drive, activadores). Crea las 7 hojas, datos base y el trigger diario.
+4. Hoja **ACCESOS**: deja a Leydi como Operativo y ajusta tu nombre. Hoja **CONFIG**: tarifas, correos e imágenes.
+5. `Implementar → Nueva implementación → Aplicación web`: ejecutar como **Yo**, acceso **Cualquier usuario de tu organización**.
+6. Cada vez que cambies código: `Implementar → Administrar implementaciones → Editar → Nueva versión`.
+
+*Con clasp:* `npm run build && clasp push --rootDir dist`.
+
+## Para desarrolladores
+
+`src/` es el código fuente (varios `.gs`). `npm run build` lo une en `dist/Codigo.gs` y copia el resto; **siempre ejecuta el build y sube `dist/`** después de editar `src/`. `tests/` prueba la lógica y la interfaz, `docs/` tiene el manual.
 
 ## Triggers (alertas de vencimiento)
 
