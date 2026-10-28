@@ -36,10 +36,10 @@ Cuando alguien con perfil **Impuestos** ingresa un CDT, el formulario tiene el a
 - **País opcional y con autocompletado.** Se puede dejar vacío. Al escribir, la lista sugiere sin importar mayúsculas ni tildes (`mexico` → *México*, `espana` → *España*, `estados` → *Estados Unidos*); con Enter, Tab o clic se completa, y al salir del campo se corrige al nombre oficial. Un país que no esté en la lista también se acepta tal cual (la lista está en `PAISES`, Config.gs).
 - **Formas de pago:** solo **Débito de cuenta** y **Efectivo**. *Transferencia* se eliminó (era lo mismo que débito); los casos viejos con "Débito" o "Transferencia" se muestran como *Débito de cuenta*.
 - **Editar la fecha de vencimiento después de enviar.** En **Mis casos** (y en el panel de gestión) el detalle del caso trae *Editar fecha de vencimiento* mientras el caso esté **Pendiente o Aprobado**. La puede cambiar cualquier destinatario o gestor; no puede ser anterior a hoy. Se audita, se reinicia la alerta de 5 días para la nueva fecha y, si la cambia una oficina, se avisa a los gestores.
-- **Instrucciones de Débito de cuenta** (pantalla que abre el correo de aprobación):
-  1. *Nota débito a la cuenta de ahorros:* ubicar la cuenta, generar nota débito (ND) **concepto 18**, **contrapartida ingreso 25**, aplicarla por cada uno de los valores del caso (se listan retención requerida, ya pagada y diferencia).
-  2. *Registro del egreso:* **Egreso 25 en efectivo** por el valor de la diferencia.
-  3. *Cierre y soportes:* verificar comprobantes, guardar la referencia `REC-<caso>` y marcar el caso completado.
+- **Instrucciones de pago** (pantalla que abre el correo de aprobación). *Retención no descontada* = la **Diferencia a cobrar** del caso (Rete 20 % − Rete 4 % ya pagada), que la herramienta muestra:
+  - **Débito de cuenta:** realizar una **ND concepto 18** con **contrapartida ingreso 25**, de la cuenta de ahorros indicada por el cliente, por el valor de la retención no descontada.
+  - **Efectivo:** realizar un **ingreso 25** por el valor de la retención no descontada.
+  - Ambas cierran con: verificar comprobante, guardar la referencia `REC-<caso>` y marcar el caso completado. Es un **ingreso, no un egreso**.
   Para cambiar la redacción, edita `pasosPago()` en `src/Cliente.html`.
 
 ## Correos: remitente noreply

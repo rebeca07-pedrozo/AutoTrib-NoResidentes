@@ -48,11 +48,14 @@ El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada un
 
 El formulario trae el apartado **Destinatarios de las notificaciones**. Escribe los correos de las oficinas (separados por coma): todos los avisos de ese caso llegarán a ellas y no a ti. Opcionalmente escribe el nombre de la oficina. Cada oficina verá el caso en **Mis casos**.
 
-# Forma de pago: Débito de cuenta
+# Formas de pago
 
-1. Nota débito (ND) a la cuenta de ahorros con **concepto 18** y **contrapartida ingreso 25**, por cada uno de los valores del caso.
-2. **Egreso 25 en efectivo** por el valor de la diferencia.
-3. Verificar comprobantes, guardar la referencia y marcar como completado.
+El valor a registrar es la **retención no descontada** (la diferencia a cobrar que muestra la herramienta).
+
+- **Débito de cuenta:** realizar una ND concepto 18 con contrapartida ingreso 25, de la cuenta de ahorros indicada por el cliente, por ese valor.
+- **Efectivo:** realizar un ingreso 25 por ese valor.
+
+Luego guarda el comprobante y marca el caso como completado.
 
 # Preguntas frecuentes
 

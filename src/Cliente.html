@@ -464,16 +464,14 @@ function vAlerta(id) {
 /* ------------------------------ Instrucciones de pago ------------------------------ */
 function pasosPago(c, k) {
   var m = money(c.diferencia);
+  var cierre = ['Paso final: Cierre y soportes', ['Verifica que el comprobante quede generado', 'Guarda la referencia REC-' + c.id, 'Marca el caso como completado en esta pantalla']];
   var base = {
     'Débito de cuenta': [
-      ['Paso 1: Nota débito a la cuenta de ahorros', ['Ubica la cuenta de ahorros del cliente', 'Genera una nota débito (ND) con concepto 18', 'Contrapartida: ingreso 25',
-        'Aplícala por cada uno de los valores del caso: retención requerida ' + money(c.rete20) + ', retención ya pagada ' + money(c.rete4) + ', diferencia a cobrar ' + m]],
-      ['Paso 2: Registro del egreso', ['Egreso 25 en efectivo', 'Valor: la diferencia, ' + m]],
-      ['Paso 3: Cierre y soportes', ['Verifica que los comprobantes queden generados', 'Guarda la referencia REC-' + c.id, 'Marca el caso como completado en esta pantalla']]],
+      ['Paso 1: Nota débito a la cuenta de ahorros', ['Ubica la cuenta de ahorros indicada por el cliente', 'Realiza una ND (nota débito) con concepto 18', 'Contrapartida: ingreso 25', 'Valor: la retención no descontada, ' + m]],
+      cierre],
     'Efectivo': [
-      ['Paso 1: Coordinar con Caja', ['Llama a Caja: Ext. ' + k.extCaja, 'Avisa: "Retención CDT por ' + m + '"']],
-      ['Paso 2: Cliente entrega el efectivo', ['El cliente se presenta con su ID', 'Caja recibe ' + m, 'Firma el comprobante']],
-      ['Paso 3: Registrar en el sistema', ['Vuelve a esta pantalla', 'Verifica cantidad, hora y firma', 'Click en "Marcar como completado"']]]
+      ['Paso 1: Ingreso por oficina', ['Realiza un ingreso 25', 'Valor: la retención no descontada, ' + m]],
+      cierre]
   };
   return base[c.formaPago] || [];
 }
