@@ -25,7 +25,6 @@ function crearPestañas() {
     [HOJAS.CONFIG, ['Parámetro', 'Valor']],
     [HOJAS.ACCESOS, CABECERAS.ACCESOS],
     [HOJAS.CDT, CABECERAS.CDT],
-    [HOJAS.LEASING, CABECERAS.LEASING],
     [HOJAS.ALERTAS, CABECERAS.ALERTAS],
     [HOJAS.AUDITORIA, CABECERAS.AUDITORIA],
     [HOJAS.ROLES, ['Rol', 'Quién lo tiene', 'Qué puede hacer']]

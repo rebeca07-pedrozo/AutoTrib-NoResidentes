@@ -9,7 +9,7 @@ Solo hay **3 roles**. También están en la hoja **ROLES** del Sheet y en la lis
 | Rol | Quién | Qué puede hacer |
 |---|---|---|
 | **Oficina** | **Por defecto**: cualquier correo que entre y no esté en ACCESOS con otro rol | Ingresar CDT, ver solo SUS casos, ver instrucciones de pago, confirmar pago, editar fecha/forma de pago desde la alerta |
-| **Operativo** | Leydi y quien administre (se asigna a mano en ACCESOS) | Todo lo anterior sobre cualquier caso, más aprobar/rechazar (individual y por lote), cambiar tarifa %, cruce Leasing, alertas, reportes |
+| **Operativo** | Leydi y quien administre (se asigna a mano en ACCESOS) | Todo lo anterior sobre cualquier caso, más aprobar/rechazar (individual y por lote), cambiar tarifa %, alertas, reportes |
 | **Contabilidad** | Se asigna a mano en ACCESOS | Solo lectura de casos Aprobados y Pagados, reportes; recibe los correos de casos listos para registro |
 
 **Rol por defecto.** Quien abre la app por primera vez y no está en ACCESOS entra como **Oficina**: se agrega solo a ACCESOS (activo = Sí, nombre sacado del correo, oficina vacía) para que luego completes su nombre y oficina. Para dar otro rol, cambia la columna `rol` de esa fila.
@@ -47,7 +47,7 @@ Si falta alguno aparece un error del tipo `... is not defined` o `No se encontr�
 
 1. Crea un **Google Sheet** vacío y abre `Extensiones → Apps Script`.
 2. Copia los 5 archivos de `dist/` como indica la tabla.
-3. Ejecuta **`inicializarSistema`** y acepta los permisos (Sheets, correo, Drive, activadores; el manifiesto no fija permisos, Apps Script los detecta solo). Crea las 7 hojas, datos base y el trigger diario.
+3. Ejecuta **`inicializarSistema`** y acepta los permisos (Sheets, correo, Drive, activadores; el manifiesto no fija permisos, Apps Script los detecta solo). Crea las 6 hojas, datos base y el trigger diario.
 4. Hoja **ACCESOS**: deja a Leydi como Operativo y ajusta tu nombre. Hoja **CONFIG**: tarifas, correos e imágenes.
 5. `Implementar → Nueva implementación → Aplicación web`: ejecutar como **Yo**, acceso **Cualquier usuario de tu organización**.
 6. Cada vez que cambies código: `Implementar → Administrar implementaciones → Editar → Nueva versión`.
@@ -89,7 +89,7 @@ Estados: `Pendiente → Aprobado → Pagado` o `Pendiente → Rechazado`. Nunca 
 
 ```bash
 npm install            # solo para la prueba de UI (Playwright)
-npm test               # 33 pruebas de lógica del servidor (roles, cálculo, correos, alertas, leasing)
+npm test               # 33 pruebas de lógica del servidor (roles, cálculo, correos, alertas)
 npm run test:ui        # formulario, validación en vivo y panel en Chromium (desktop + móvil)
 npm run manual         # regenera docs/Manual_Usuario_AutoTrib.pdf
 ```
@@ -98,6 +98,5 @@ npm run manual         # regenera docs/Manual_Usuario_AutoTrib.pdf
 
 - **Logo y triángulos:** no se incluyen activos oficiales; sube los tuyos a Drive y pon el ID en CONFIG (ver arriba). Sin imágenes se usa la marca tipográfica y triángulos CSS.
 - **Formularios en correo:** Gmail no ejecuta formularios HTML; el botón "Editar datos" abre una pantalla de la propia aplicación (autenticada) con los campos editables.
-- **Excel de Leasing:** se lee en el navegador con SheetJS (cdnjs). Acepta `.xlsx/.xls/.csv`. Si el archivo no trae `Valor Contabilidad`, se usa el ya cargado para ese `# Recibo`.
 - **Cuota de correo:** `MailApp` permite ~1.500 destinatarios/día en Workspace (100 en cuentas gratuitas).
 - **Video demo** de 5 min: no se genera desde este repositorio.

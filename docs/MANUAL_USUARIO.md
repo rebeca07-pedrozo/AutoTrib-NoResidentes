@@ -5,7 +5,7 @@ Abre el enlace que te compartió el administrador. El sistema identifica tu corr
 # Roles
 
 - **Oficina** (por defecto): ingresa CDT y ve solo sus casos.
-- **Operativo** (Leydi y administradores): aprueba, ajusta tarifa, Leasing, alertas y reportes.
+- **Operativo** (Leydi y administradores): aprueba, ajusta tarifa, alertas y reportes.
 - **Contabilidad**: solo lectura de casos aprobados y pagados.
 
 El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada uno.
@@ -42,8 +42,7 @@ El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada un
 
 3. **Aprobar** envía las instrucciones a la oficina. **Rechazar** exige escribir el motivo. Ambas acciones piden confirmación y quedan en la auditoría.
 4. **Aprobar lote**: marca varios casos pendientes y aprueba con sus condiciones actuales.
-5. **Cruce Leasing**: descarga el template, sube el Excel del experto contable, revisa discrepancias y cierra con **Reportar incidente**, **Rectificar** o **Listo**.
-6. **Alertas**: vencimientos próximos y su estado. **Reportes**: resumen y descarga a Excel (CSV) o PDF (Imprimir).
+5. **Alertas**: vencimientos próximos y su estado. **Reportes**: resumen y descarga a Excel (CSV) o PDF (Imprimir).
 
 # Si eres Contabilidad
 

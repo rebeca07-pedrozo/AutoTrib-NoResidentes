@@ -118,11 +118,3 @@ function enviarCambioAlerta(caso, detalle) {
     '<p>' + esc(caso.ingresadoPor) + ' actualizó el caso tras la alerta de vencimiento:</p><p style="background:' + COLORES.GRIS_CLARO +
     ';padding:12px;border-radius:8px">' + esc(detalle) + '</p>' + boton_('Abrir AutoTrib', urlApp()));
 }
-
-function enviarIncidenteLeasing(resumen, nota, usuario) {
-  var cfg = obtenerConfig();
-  enviar_([cfg.correoAdmin].concat(correosPorRol(ROLES.CONTABILIDAD)), 'Incidente en cruce Leasing Habitacional',
-    'Incidente reportado en el cruce',
-    '<p>' + esc(usuario) + ' reportó un incidente.</p>' + tablaDatos_([['Registros', resumen.total], ['Discrepancias', resumen.discrepancias],
-      ['Exactitud', resumen.exactitud + '%']]) + (nota ? '<p><b>Notas:</b> ' + esc(nota) + '</p>' : ''));
-}

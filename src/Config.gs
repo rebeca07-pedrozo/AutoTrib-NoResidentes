@@ -27,7 +27,6 @@ var HOJAS = {
   CONFIG: 'CONFIG',
   ACCESOS: 'ACCESOS',
   CDT: 'CASOS_CDT',
-  LEASING: 'CASOS_LEASING',
   ALERTAS: 'ALERTAS',
   AUDITORIA: 'AUDITORÍA',
   ROLES: 'ROLES'
@@ -65,7 +64,7 @@ var ROLES_DEFINICION = [
   ['Oficina', 'Por defecto para cualquier correo que no esté en ACCESOS como otro rol.',
    'Ingresar CDT, ver solo SUS casos, ver instrucciones de pago, confirmar pago, editar fecha/forma de pago desde la alerta.'],
   ['Operativo', 'Leydi y administradores. Se asigna a mano en ACCESOS.',
-   'Todo lo de Oficina sobre cualquier caso, más: aprobar/rechazar (individual y lote), cambiar tarifa %, cruce Leasing, alertas, reportes.'],
+   'Todo lo de Oficina sobre cualquier caso, más: aprobar/rechazar (individual y lote), cambiar tarifa %, alertas, reportes.'],
   ['Contabilidad', 'Se asigna a mano en ACCESOS.',
    'Solo lectura de casos Aprobados y Pagados, reportes y descarga. Recibe correos de casos listos para registro.']
 ];
@@ -77,8 +76,6 @@ var CABECERAS = {
         'Rete4%', 'Rete20%', 'Diferencia', 'Saldo Neto', 'Vencimiento', 'Forma Pago', 'Status',
         'Tarifa%', 'Notas Leydi', 'Aprobado Por', 'Fecha Aprobación', 'Oficina', 'Ingresado Por',
         'Email Oficina', 'Notas Oficina', 'Fecha Pago'],
-  LEASING: ['# Cuenta', '# Crédito', '# Recibo', 'Valor Operativo', 'Valor Contabilidad',
-            'Diferencia', '% Variación', 'Estado', 'Lote', 'Cargado Por', 'Notas'],
   ALERTAS: ['ID Caso', 'Fecha Vencimiento', 'Días para Vencer', 'Status'],
   AUDITORIA: ['Timestamp', 'Usuario', 'Acción', 'ID Caso', 'Detalle']
 };
@@ -89,9 +86,6 @@ var CDT_CLAVES = ['id', 'fechaIngesta', 'cliente', 'idCliente', 'pais', 'valorCd
   'emailOficina', 'notasOficina', 'fechaPago'];
 
 var CDT_FECHAS = ['fechaIngesta', 'vencimiento', 'fechaAprobacion', 'fechaPago'];
-
-var LEASING_CLAVES = ['cuenta', 'credito', 'recibo', 'valorOperativo', 'valorContabilidad',
-  'diferencia', 'variacion', 'estado', 'lote', 'cargadoPor', 'notas'];
 
 var ALERTAS_CLAVES = ['id', 'vencimiento', 'dias', 'status'];
 

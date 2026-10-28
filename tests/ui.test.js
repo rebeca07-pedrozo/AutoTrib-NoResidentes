@@ -31,7 +31,7 @@ const R={
  obtenerDetalleCaso:id=>({caso:D.casos.find(c=>c.id===id),auditoria:[{fecha:'15/10/2026 14:30',usuario:'Pepito García',accion:'ingesta',detalle:'Datos ingesta completos'}],config:{tarifaSistema:4}}),
  obtenerInstrucciones:id=>({caso:D.casos[1],contacto:{nombre:'Leydi Bernal',email:'leydi@dav.com.co',ext:'2345',extCaja:'1234'}}),
  obtenerImagenes:()=>(${JSON.stringify({ triangulos: IMG.triangulos, bienvenida: IMG.bienvenida })}),
- resolverCaso:()=>({}), listarAlertas:()=>[], obtenerLeasing:()=>({registros:[],resumen:{total:0,conciliados:0,discrepancias:0,exactitud:0},errores:[],fechaCarga:''})
+ resolverCaso:()=>({}), listarAlertas:()=>[]
 };
 window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler') return ok=>({withFailureHandler:ko=>new Proxy({},{get:(_,fn)=>(...a)=>{window.__llamadas.push([fn,a]);setTimeout(()=>{try{ok(R[fn](...a))}catch(e){ko(e)}},window.__retraso?4000:30)}})}); }})}};
 `;

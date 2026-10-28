@@ -3,7 +3,7 @@
 const fs = require('fs'), path = require('path');
 const src = path.join(__dirname, 'src'), dist = path.join(__dirname, 'dist');
 fs.rmSync(dist, { recursive: true, force: true }); fs.mkdirSync(dist);
-const orden = ['Config.gs', 'Code.gs', 'Sheets.gs', 'Imagenes.gs', 'Email.gs', 'Alertas.gs', 'Leasing.gs'];
+const orden = ['Config.gs', 'Code.gs', 'Sheets.gs', 'Imagenes.gs', 'Email.gs', 'Alertas.gs'];
 const todos = fs.readdirSync(src).filter(f => f.endsWith('.gs'));
 const faltan = todos.filter(f => !orden.includes(f));
 if (faltan.length) { console.error('Agrega a build.js el orden de:', faltan.join(', ')); process.exit(1); }

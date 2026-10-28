@@ -4,14 +4,13 @@ const E = crearEntorno();
 const c = E.ctx;
 let pasadas = 0;
 function t(nombre, fn) { try { fn(); pasadas++; console.log('  ✓', nombre); } catch (e) { console.error('  ✗', nombre, '\n   ', e.message); process.exitCode = 1; } }
-function esperar() { const f = Date.now() + 3; while (Date.now() < f); } // lotes distintos entre cargas consecutivas
 function como(email) { E.estado.email = email; }
 function sinErrores(fn, texto) { assert.throws(fn, texto); }
 
 c.inicializarSistema();
 console.log('Servidor');
 
-t('crea las 7 hojas (incluye ROLES)', () => assert.deepStrictEqual(Object.keys(E.hojas).sort(), ['ACCESOS', 'ALERTAS', 'AUDITORÍA', 'CASOS_CDT', 'CASOS_LEASING', 'CONFIG', 'ROLES'].sort()));
+t('crea las 6 hojas (incluye ROLES, sin Leasing)', () => assert.deepStrictEqual(Object.keys(E.hojas).sort(), ['ACCESOS', 'ALERTAS', 'AUDITORÍA', 'CASOS_CDT', 'CONFIG', 'ROLES'].sort()));
 t('validación de dominio (opcional) bloquea correos externos', () => { c.APP.VALIDAR_DOMINIO = true; como('x@otra.com'); assert.strictEqual(c.iniciarSesion().ok, false); c.APP.VALIDAR_DOMINIO = false; });
 t('usuario inactivo no entra', () => { E.hojas.ACCESOS.appendRow(['inactivo@dav.com.co', 'Ina', 'Oficina', 'No', '']); como('inactivo@dav.com.co'); assert.strictEqual(c.iniciarSesion().ok, false); });
 t('Oficina entra y recibe rol', () => { como('pepito@dav.com.co'); const r = c.iniciarSesion(); assert.ok(r.ok); assert.strictEqual(r.usuario.rol, 'Oficina'); });
@@ -181,29 +180,6 @@ t('oficina edita desde la alerta → Modificada + aviso a Operativo', () => {
   assert.ok(c.confirmarVencimientoCaso(id2));
 });
 
-console.log('Leasing');
-t('cruce: conciliado y discrepancias con % correctos', () => {
-  como('leydi@dav.com.co');
-  esperar(); const rep = c.cruzarDatos([
-    { cuenta: 1001, credito: 'CRD-001', recibo: 'REC-001', valorOperativo: 1200000, valorContabilidad: 1200000 },
-    { cuenta: 1002, credito: 'CRD-002', recibo: 'REC-002', valorOperativo: 850000, valorContabilidad: 800000 },
-    { cuenta: 1003, credito: 'CRD-003', recibo: 'REC-003', valorOperativo: '2.500.000', valorContabilidad: '2,600,000' }
-  ]);
-  const r = rep.resumen; assert.deepStrictEqual([r.total, r.conciliados, r.discrepancias, r.exactitud], [3, 1, 2, 33]);
-  const por = {}; rep.registros.forEach(x => por[x.recibo] = x);
-  assert.strictEqual(por['REC-002'].diferencia, -50000); assert.ok(Math.abs(por['REC-002'].variacion * 100 + 5.9) < 0.01);
-  assert.strictEqual(por['REC-003'].diferencia, 100000); assert.ok(Math.abs(por['REC-003'].variacion * 100 - 4) < 0.01);
-});
-t('duplicados y recibos vacíos se reportan', () => {
-  esperar(); const rep = c.cruzarDatos([{ cuenta: 1, credito: 'a', recibo: 'R9', valorOperativo: 10, valorContabilidad: 10 }, { cuenta: 1, credito: 'a', recibo: 'R9', valorOperativo: 10, valorContabilidad: 10 }, { cuenta: 2, credito: 'b', recibo: '', valorOperativo: 5, valorContabilidad: 5 }]);
-  assert.strictEqual(rep.errores.length, 2); assert.strictEqual(rep.resumen.total, 1);
-});
-t('marcar incidente actualiza estado y avisa', () => {
-  const antes = E.correos.length;
-  esperar(); const rep = c.cruzarDatos([{ cuenta: 5, credito: 'c', recibo: 'R50', valorOperativo: 100, valorContabilidad: 90 }]);
-  const r2 = c.marcarLeasing('incidente', 'revisar');
-  assert.strictEqual(r2.registros.find(x => x.recibo === 'R50').estado, 'Incidente'); assert.ok(E.correos.length > antes);
-});
-t('Oficina no puede usar Leasing', () => { como('pepito@dav.com.co'); sinErrores(() => c.cruzarDatos([{}]), /rol/); });
-
 console.log(`\n${pasadas} pruebas pasadas`);
+
+assert.strictEqual(typeof c.cruzarDatos, 'undefined', 'Leasing eliminado');
