@@ -10,7 +10,8 @@ var APP = {
   DOMINIO: 'dav.com.co',
   VALIDAR_DOMINIO: false,   // true = solo correos @dav.com.co
   DIAS_ALERTA: 5,           // días antes del vencimiento para avisar
-  HORA_ALERTA: 8            // hora diaria del trigger
+  HORA_ALERTA: 8,           // hora diaria del trigger
+  NOMBRE_REMITENTE: 'AutoTrib | Impuestos Davivienda'   // nombre visible en los correos (se envían como noreply)
 };
 
 var COLORES = {
@@ -32,7 +33,12 @@ var HOJAS = {
   ROLES: 'ROLES'
 };
 
-var ROLES = { OFICINA: 'Oficina', OPERATIVO: 'Operativo', CONTABILIDAD: 'Contabilidad' };
+var ROLES = { OFICINA: 'Oficina', OPERATIVO: 'Operativo', IMPUESTOS: 'Impuestos' };
+
+/** Roles que gestionan casos (aprueban, ajustan tarifa, ven todo). */
+var GESTORES = [ROLES.OPERATIVO, ROLES.IMPUESTOS];
+/** Roles que pueden ingresar CDT. */
+var INGRESANTES = [ROLES.OFICINA, ROLES.IMPUESTOS];
 
 var ESTADOS = {
   PENDIENTE: 'Pendiente',
@@ -41,7 +47,7 @@ var ESTADOS = {
   PAGADO: 'Pagado'
 };
 
-var FORMAS_PAGO = ['Débito', 'Efectivo', 'Transferencia'];
+var FORMAS_PAGO = ['Débito de cuenta', 'Efectivo'];
 
 /** Parámetros de la hoja CONFIG: [parámetro, valor por defecto, clave interna]. */
 var CONFIG_BASE = [
@@ -49,7 +55,6 @@ var CONFIG_BASE = [
   ['Tarifa Sistema (%)', 4, 'tarifaSistema'],
   ['Monto Mínimo Retención', 84000, 'montoMinimo'],
   ['Correo Admin', 'admin@dav.com.co', 'correoAdmin'],
-  ['Correo Contabilidad', 'contabilidad@dav.com.co', 'correoContabilidad'],
   ['Extensión Operativo', '2345', 'extOperativo'],
   ['Extensión Caja', '1234', 'extCaja'],
   ['Rol por defecto', 'Oficina', 'rolDefecto'],
@@ -61,12 +66,12 @@ var CONFIG_BASE = [
 
 /** Definición de roles (se vuelca a la hoja ROLES como referencia). */
 var ROLES_DEFINICION = [
-  ['Oficina', 'Por defecto para cualquier correo que no esté en ACCESOS como otro rol.',
-   'Ingresar CDT, ver solo SUS casos, ver instrucciones de pago, confirmar pago, editar fecha/forma de pago desde la alerta.'],
-  ['Operativo', 'Leydi y administradores. Se asigna a mano en ACCESOS.',
-   'Todo lo de Oficina sobre cualquier caso, más: aprobar/rechazar (individual y lote), cambiar tarifa %, alertas, reportes.'],
-  ['Contabilidad', 'Se asigna a mano en ACCESOS.',
-   'Solo lectura de casos Aprobados y Pagados, reportes y descarga. Recibe correos de casos listos para registro.']
+  ['Oficina', 'Por defecto para cualquier correo que no esté en ACCESOS con otro rol.',
+   'Ingresar CDT (los correos le llegan a ella misma), ver solo los casos donde su correo es destinatario, ver instrucciones de pago, confirmar pago, editar la fecha de vencimiento.'],
+  ['Operativo', 'Gestión sin ingreso. Se asigna a mano en ACCESOS.',
+   'Panel de gestión: ver todos los casos, aprobar/rechazar (individual y lote), cambiar tarifa %, alertas, reportes. No ingresa CDT.'],
+  ['Impuestos', 'Leydi Y Librado Bernal y el equipo de Impuestos. Se asigna a mano en ACCESOS.',
+   'Las dos visuales: ingresar CDT en nombre de una o varias oficinas (indicando los correos destinatarios, para que las notificaciones lleguen a ellas y no a quien digita) y gestionarlos como Operativo.']
 ];
 
 /** Cabeceras de cada hoja. En CASOS_CDT el orden coincide con CDT_CLAVES. */
@@ -75,7 +80,7 @@ var CABECERAS = {
   CDT: ['ID Caso', 'Fecha Ingesta', 'Cliente', 'ID Cliente', 'País', 'Valor CDT', 'Rendimientos',
         'Rete4%', 'Rete20%', 'Diferencia', 'Saldo Neto', 'Vencimiento', 'Forma Pago', 'Status',
         'Tarifa%', 'Notas Leydi', 'Aprobado Por', 'Fecha Aprobación', 'Oficina', 'Ingresado Por',
-        'Email Oficina', 'Notas Oficina', 'Fecha Pago'],
+        'Email Oficina', 'Notas Oficina', 'Fecha Pago', 'Correos Destino'],
   ALERTAS: ['ID Caso', 'Fecha Vencimiento', 'Días para Vencer', 'Status'],
   AUDITORIA: ['Timestamp', 'Usuario', 'Acción', 'ID Caso', 'Detalle']
 };
@@ -83,7 +88,7 @@ var CABECERAS = {
 var CDT_CLAVES = ['id', 'fechaIngesta', 'cliente', 'idCliente', 'pais', 'valorCdt', 'rendimientos',
   'rete4', 'rete20', 'diferencia', 'saldoNeto', 'vencimiento', 'formaPago', 'status',
   'tarifa', 'notasLeydi', 'aprobadoPor', 'fechaAprobacion', 'oficina', 'ingresadoPor',
-  'emailOficina', 'notasOficina', 'fechaPago'];
+  'emailOficina', 'notasOficina', 'fechaPago', 'correosDestino'];
 
 var CDT_FECHAS = ['fechaIngesta', 'vencimiento', 'fechaAprobacion', 'fechaPago'];
 

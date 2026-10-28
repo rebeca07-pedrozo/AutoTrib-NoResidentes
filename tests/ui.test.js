@@ -14,17 +14,17 @@ const IMG = CON_IMG ? {
 } : { logo: '', carga: '', triangulos: '', bienvenida: '' };
 
 const casos = [
-  { id: 'CDT001', fechaIngesta: '2026-10-15', cliente: 'Juan Pérez', idCliente: '123456', pais: 'Colombia', valorCdt: 5000000, rendimientos: 5000000, rete4: 200000, rete20: 1000000, diferencia: 800000, saldoNeto: 4000000, vencimiento: '2026-10-25', formaPago: 'Débito', status: 'Pendiente', tarifa: 20, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' },
-  { id: 'CDT002', fechaIngesta: '2026-10-16', cliente: 'María López', idCliente: '234567', pais: 'Estados Unidos', valorCdt: 10000000, rendimientos: 10000000, rete4: 400000, rete20: 2000000, diferencia: 1600000, saldoNeto: 8000000, vencimiento: '2026-10-30', formaPago: 'Transferencia', status: 'Aprobado', tarifa: 20, notasLeydi: 'Bien', aprobadoPor: 'Leydi Bernal', fechaAprobacion: '2026-10-16', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' }
+  { id: 'CDT001', fechaIngesta: '2026-10-15', cliente: 'Juan Pérez', idCliente: '123456', pais: 'Colombia', valorCdt: 5000000, rendimientos: 5000000, rete4: 200000, rete20: 1000000, diferencia: 800000, saldoNeto: 4000000, vencimiento: '2026-10-25', formaPago: 'Débito de cuenta', status: 'Pendiente', tarifa: 20, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' },
+  { id: 'CDT002', fechaIngesta: '2026-10-16', cliente: 'María López', idCliente: '234567', pais: 'Estados Unidos', valorCdt: 10000000, rendimientos: 10000000, rete4: 400000, rete20: 2000000, diferencia: 1600000, saldoNeto: 8000000, vencimiento: '2026-10-30', formaPago: 'Efectivo', status: 'Aprobado', tarifa: 20, notasLeydi: 'Bien', aprobadoPor: 'Leydi Bernal', fechaAprobacion: '2026-10-16', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' }
 ];
-const usuario = rol === 'Oficina' ? { email: 'pepito@dav.com.co', nombre: 'Pepito García', rol, oficina: 'Bogotá Centro' } : { email: 'leydi@dav.com.co', nombre: 'Leydi Bernal', rol, oficina: 'Operaciones Tributarias' };
+const usuario = rol === 'Oficina' ? { email: 'pepito@dav.com.co', nombre: 'Pepito García', rol, oficina: 'Bogotá Centro' } : { email: 'leydi@dav.com.co', nombre: 'Leydi Y Librado Bernal', rol, oficina: 'Impuestos' };
 
 const mock = `
 window.__llamadas=[];
 const D=${JSON.stringify({ casos, usuario })};
 window.IMAGENES=${JSON.stringify({ logo: IMG.logo, carga: IMG.carga })};
 const R={
- iniciarSesion:()=>({ok:true,usuario:D.usuario,config:{tarifaNoResidente:20,tarifaSistema:4,montoMinimo:84000},paises:['Colombia','Estados Unidos','España'],formasPago:['Débito','Efectivo','Transferencia'],hoy:'2026-10-20',resumen:{pendientes:1,hoy:1,aprobados:1,total:2,recientes:[{id:'CDT002',cliente:'María',status:'Aprobado'}]}}),
+ iniciarSesion:()=>({ok:true,usuario:D.usuario,config:{tarifaNoResidente:20,tarifaSistema:4,montoMinimo:84000},paises:['Colombia','Estados Unidos','España','México'],formasPago:['Débito de cuenta','Efectivo'],hoy:'2026-10-20',resumen:{pendientes:1,hoy:1,aprobados:1,total:2,recientes:[{id:'CDT002',cliente:'María',status:'Aprobado'}]}}),
  obtenerResumen:()=>({pendientes:1,hoy:1,aprobados:1,total:2,recientes:[]}),
  guardarCaso:a=>({id:'CDT003',calculo:{}}),
  listarMisCasos:()=>D.casos, listarCasos:()=>D.casos,
@@ -46,23 +46,36 @@ window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler
     await p.goto('file://' + f);
     await p.waitForSelector('.hero'); await p.waitForTimeout(500);
     await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-inicio.png` });
-    if (rol === 'Oficina') {
+    if (rol === 'Oficina' || rol === 'Impuestos') {
       await p.click('[data-v=ingresar]'); await p.waitForSelector('#f-cdt');
+      assert.strictEqual(await p.isVisible('#correosDestino'), rol === 'Impuestos', 'destinatarios solo para Impuestos');
       assert.ok(await p.isDisabled('#enviar'), 'botón deshabilitado al inicio');
-      await p.fill('#cliente', 'Juan Pérez'); await p.fill('#idCliente', '123456'); await p.fill('#pais', 'Colombia');
-      await p.fill('#valorCdt', '5000000'); await p.fill('#rendimientos', '5000000'); await p.selectOption('#formaPago', 'Débito');
+      await p.fill('#cliente', 'Juan Pérez'); await p.fill('#idCliente', '123456');
+      await p.fill('#valorCdt', '5000000'); await p.fill('#rendimientos', '5000000'); await p.selectOption('#formaPago', 'Débito de cuenta');
+      assert.deepStrictEqual(await p.$$eval('#formaPago option', o => o.map(x => x.textContent)), ['Selecciona...', 'Débito de cuenta', 'Efectivo']);
       assert.strictEqual(await p.inputValue('#valorCdt'), '5,000,000');
       assert.strictEqual(await p.textContent('[data-c=rete20]'), '$ 1,000,000');
       assert.strictEqual(await p.textContent('[data-c=diferencia]'), '$ 800,000');
       assert.strictEqual(await p.textContent('[data-c=saldoNeto]'), '$ 4,000,000');
-      assert.ok(!(await p.isDisabled('#enviar')), 'botón habilitado cuando todo válido');
+      if (rol === 'Impuestos') {
+        assert.ok(await p.isDisabled('#enviar'), 'sin destinatarios no se puede enviar');
+        await p.fill('#correosDestino', 'bogota@dav.com.co, malo'); assert.ok(await p.isDisabled('#enviar'));
+        await p.fill('#correosDestino', 'bogota@dav.com.co, cali@dav.com.co');
+      }
+      assert.ok(!(await p.isDisabled('#enviar')), 'país es opcional: el botón se habilita sin país');
+      await p.fill('#pais', 'mexico');
+      assert.strictEqual(await p.textContent('.ac-item.act'), 'México', 'autocompleta sin tildes ni mayúsculas');
+      await p.keyboard.press('Enter'); assert.strictEqual(await p.inputValue('#pais'), 'México');
+      await p.fill('#pais', 'ESPANA'); await p.press('#pais', 'Tab'); assert.strictEqual(await p.inputValue('#pais'), 'España');
       await p.fill('#rendimientos', '6000000');
       assert.ok(await p.isDisabled('#enviar'), 'rendimientos > CDT bloquea');
       await p.fill('#rendimientos', '5000000');
       await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-form.png`, fullPage: true });
       await p.click('#enviar'); await p.click('.velo [data-r="1"]'); await p.waitForSelector('text=enviado');
-      assert.ok((await p.evaluate('window.__llamadas')).some(l => l[0] === 'guardarCaso'));
-    } else {
+      const g = (await p.evaluate('window.__llamadas')).find(l => l[0] === 'guardarCaso'); assert.ok(g);
+      assert.strictEqual(g[1][0].pais, 'España'); if (rol === 'Impuestos') assert.strictEqual(g[1][0].correosDestino, 'bogota@dav.com.co, cali@dav.com.co');
+    }
+    if (rol !== 'Oficina') {
       await p.click('[data-v=panel]'); await p.waitForSelector('table.t');
       await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-panel.png` });
       await p.click('tr[data-id=CDT001]'); await p.waitForSelector('#d-tarifa');

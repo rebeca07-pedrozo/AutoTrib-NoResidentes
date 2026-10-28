@@ -86,34 +86,41 @@ function calcularRetenciones(rendimientos, valorCdt, tarifa, tarifaSistema) {
 function obtenerResumen() {
   var u = exigirUsuario_();
   var hoy = hoyIso();
-  if (u.rol === ROLES.OFICINA) {
-    var mios = obtenerCasos(function (c) { return c.emailOficina === u.email; });
+  var esGestor = GESTORES.indexOf(u.rol) >= 0;
+  var recientes = function (lista) { return lista.slice(-5).reverse().map(function (c) { return { id: c.id, cliente: c.cliente, status: c.status }; }); };
+  var estados = function (lista) {
     return {
-      pendientes: mios.filter(function (c) { return c.status === ESTADOS.PENDIENTE; }).length,
-      aprobados: mios.filter(function (c) { return c.status === ESTADOS.APROBADO || c.status === ESTADOS.PAGADO; }).length,
-      total: mios.length,
-      recientes: mios.slice(-5).reverse().map(function (c) { return { id: c.id, cliente: c.cliente, status: c.status }; })
+      pendientes: lista.filter(function (c) { return c.status === ESTADOS.PENDIENTE; }).length,
+      aprobados: lista.filter(function (c) { return c.status === ESTADOS.APROBADO || c.status === ESTADOS.PAGADO; }).length,
+      total: lista.length
     };
+  };
+  var propios = obtenerCasos(function (c) { return casoEsDe_(c, u); });
+  if (!esGestor) {
+    var r = estados(propios); r.recientes = recientes(propios); return r;
   }
   var todos = obtenerCasos();
-  return {
-    pendientes: todos.filter(function (c) { return c.status === ESTADOS.PENDIENTE; }).length,
-    hoy: todos.filter(function (c) { return c.fechaAprobacion === hoy; }).length,
-    aprobados: todos.filter(function (c) { return c.status === ESTADOS.APROBADO || c.status === ESTADOS.PAGADO; }).length,
-    total: todos.length
-  };
+  var g = estados(todos);
+  g.hoy = todos.filter(function (c) { return c.fechaAprobacion === hoy; }).length;
+  g.recientes = recientes(propios);
+  return g;
+}
+
+/** ¿El caso es "mío"? Oficina: soy destinatario. Impuestos: lo ingresé yo o soy destinatario. */
+function casoEsDe_(c, u) {
+  return esDestinatario_(c, u.email) || (u.rol === ROLES.IMPUESTOS && c.ingresadoPor === u.nombre);
 }
 
 /* ------------------------------ Ingesta (Oficina) ------------------------------ */
 
 function guardarCaso(d) {
-  var u = exigirUsuario_([ROLES.OFICINA]);
+  var u = exigirUsuario_(INGRESANTES);
   var cfg = obtenerConfig();
   d = d || {};
 
   var cliente = limpiarTexto(d.cliente, 120);
   var idCliente = limpiarTexto(d.idCliente, 20);
-  var pais = PAISES.filter(function (p) { return p.toLowerCase() === String(d.pais || '').trim().toLowerCase(); })[0];
+  var pais = normalizarPais_(d.pais);               // opcional, texto libre
   var valorCdt = Math.round(Number(d.valorCdt));
   var rendimientos = Math.round(Number(d.rendimientos));
   var formaPago = FORMAS_PAGO.filter(function (f) { return f === d.formaPago; })[0];
@@ -121,11 +128,24 @@ function guardarCaso(d) {
 
   if (cliente.length < 3) throw new Error('El nombre del cliente es obligatorio.');
   if (!/^[A-Za-z0-9\-]{4,20}$/.test(idCliente)) throw new Error('El ID del cliente no es válido.');
-  if (!pais) throw new Error('Selecciona un país de la lista.');
   if (!(valorCdt > 0) || !(rendimientos > 0)) throw new Error('Valor CDT y rendimientos deben ser mayores a cero.');
   if (rendimientos > valorCdt) throw new Error('Los rendimientos no pueden superar el valor del CDT.');
   if (!formaPago) throw new Error('Selecciona la forma de pago.');
   if (d.vencimiento && (!venc || d.vencimiento < hoyIso())) throw new Error('La fecha de vencimiento no es válida.');
+
+  // Destinatarios: una Oficina se notifica a sí misma; Impuestos indica a qué oficinas les llega todo.
+  var destinos, oficina;
+  if (u.rol === ROLES.IMPUESTOS) {
+    var p = parsearCorreos_(d.correosDestino);
+    if (p.invalidos.length) throw new Error('Correos no válidos: ' + p.invalidos.join(', '));
+    if (!p.validos.length) throw new Error('Indica al menos un correo de oficina que recibirá las notificaciones.');
+    if (p.validos.length > 10) throw new Error('Máximo 10 correos destinatarios.');
+    destinos = p.validos;
+    oficina = limpiarTexto(d.oficina, 80);
+  } else {
+    destinos = [u.email];
+    oficina = u.oficina;
+  }
 
   var calc = calcularRetenciones(rendimientos, valorCdt, cfg.tarifaNoResidente, cfg.tarifaSistema);
   var caso = {
@@ -133,10 +153,11 @@ function guardarCaso(d) {
     rete4: calc.rete4, rete20: calc.rete20, diferencia: calc.diferencia, saldoNeto: calc.saldoNeto,
     vencimiento: d.vencimiento || '', formaPago: formaPago, status: ESTADOS.PENDIENTE,
     tarifa: cfg.tarifaNoResidente, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '',
-    oficina: u.oficina, ingresadoPor: u.nombre, emailOficina: u.email, notasOficina: '', fechaPago: ''
+    oficina: oficina, ingresadoPor: u.nombre, emailOficina: destinos[0], notasOficina: '', fechaPago: '',
+    correosDestino: destinos.join(', ')
   };
   var id = insertarCaso(caso);
-  registrarAuditoria(u.nombre, 'ingesta', id, 'Datos ingesta completos');
+  registrarAuditoria(u.nombre, 'ingesta', id, 'Datos ingesta completos' + (u.rol === ROLES.IMPUESTOS ? '. Destinatarios: ' + caso.correosDestino : ''));
   caso.id = id;
   try { enviarConfirmacionIngesta(caso, u); } catch (err) { Logger.log('Correo ingesta: ' + err.message); }
   return { id: id, calculo: calc };
@@ -144,18 +165,17 @@ function guardarCaso(d) {
 
 /* ------------------------------ Consultas ------------------------------ */
 
-/** Casos propios de la Oficina. */
+/** Casos propios (Oficina: donde es destinataria; Impuestos: los que ingresó o donde es destinataria). */
 function listarMisCasos() {
-  var u = exigirUsuario_([ROLES.OFICINA]);
-  return obtenerCasos(function (c) { return c.emailOficina === u.email; }).reverse();
+  var u = exigirUsuario_(INGRESANTES);
+  return obtenerCasos(function (c) { return casoEsDe_(c, u); }).reverse();
 }
 
-/** Casos para Operativo (todos) y Contabilidad (solo aprobados/pagados). */
+/** Todos los casos, con filtros opcionales. Solo roles de gestión. */
 function listarCasos(filtros) {
-  var u = exigirUsuario_([ROLES.OPERATIVO, ROLES.CONTABILIDAD]);
+  exigirUsuario_(GESTORES);
   var f = filtros || {};
   return obtenerCasos(function (c) {
-    if (u.rol === ROLES.CONTABILIDAD && c.status !== ESTADOS.APROBADO && c.status !== ESTADOS.PAGADO) return false;
     if (f.estado && c.status !== f.estado) return false;
     if (f.oficina && c.oficina !== f.oficina) return false;
     if (f.desde && c.fechaIngesta < f.desde) return false;
@@ -170,24 +190,21 @@ function obtenerDetalleCaso(id) {
   var r = buscarCaso(id);
   if (!r) throw new Error('Caso no encontrado.');
   verificarPropiedad_(u, r.caso);
-  if (u.rol === ROLES.CONTABILIDAD && r.caso.status !== ESTADOS.APROBADO && r.caso.status !== ESTADOS.PAGADO) {
-    throw new Error('Tu rol no permite ver este caso.');
-  }
-  return { caso: r.caso, auditoria: obtenerAuditoria(id), config: { tarifaSistema: obtenerConfig().tarifaSistema } };
+  return { caso: r.caso, auditoria: obtenerAuditoria(id), config: { tarifaSistema: obtenerConfig().tarifaSistema }, gestor: GESTORES.indexOf(u.rol) >= 0 };
 }
 
 function verificarPropiedad_(u, caso) {
-  if (u.rol === ROLES.OFICINA && caso.emailOficina !== u.email) throw new Error('Este caso no pertenece a tu oficina.');
+  if (u.rol === ROLES.OFICINA && !esDestinatario_(caso, u.email)) throw new Error('Este caso no pertenece a tu oficina.');
 }
 
-/* ------------------------------ Autorización (Operativo) ------------------------------ */
+/* ------------------------------ Autorización (Operativo e Impuestos) ------------------------------ */
 
 /**
  * accion: 'guardar' (solo notas/ajustes), 'aprobar' o 'rechazar'.
  * datos: { tarifa, formaPago, vencimiento, notas }
  */
 function resolverCaso(id, accion, datos) {
-  var u = exigirUsuario_([ROLES.OPERATIVO]);
+  var u = exigirUsuario_(GESTORES);
   var d = datos || {};
   var r = buscarCaso(id);
   if (!r) throw new Error('Caso no encontrado.');
@@ -218,10 +235,7 @@ function resolverCaso(id, accion, datos) {
 
   var nuevo = actualizarCaso(id, cambios, u.nombre, nombreAccion);
   try {
-    if (accion === 'aprobar') {
-      enviarInstruccionesPago(nuevo);
-      enviarAvisoContabilidad(nuevo);
-    }
+    if (accion === 'aprobar') enviarInstruccionesPago(nuevo);
     if (accion === 'rechazar') enviarRechazo(nuevo);
   } catch (err) { Logger.log('Correo resolución: ' + err.message); }
   return nuevo;
@@ -229,7 +243,7 @@ function resolverCaso(id, accion, datos) {
 
 /** Aprueba varios casos con la tarifa y forma de pago actuales. Devuelve conteos. */
 function aprobarLote(ids) {
-  exigirUsuario_([ROLES.OPERATIVO]);
+  exigirUsuario_(GESTORES);
   if (!ids || !ids.length) throw new Error('Selecciona al menos un caso.');
   if (ids.length > 50) throw new Error('Máximo 50 casos por lote.');
   var ok = 0, fallos = [];
@@ -256,22 +270,45 @@ function obtenerInstrucciones(id) {
     throw new Error('El caso aún no está aprobado (estado: ' + r.caso.status + ').');
   }
   var cfg = obtenerConfig();
-  var op = correosPorRol(ROLES.OPERATIVO)[0] || cfg.correoAdmin;
+  var op = correosPorRol(ROLES.IMPUESTOS)[0] || correosPorRol(ROLES.OPERATIVO)[0] || cfg.correoAdmin;
   var acc = obtenerAcceso(op);
   return {
     caso: r.caso,
-    contacto: { nombre: acc ? acc.nombre : 'Operativo', email: op, ext: cfg.extOperativo, extCaja: cfg.extCaja }
+    contacto: { nombre: acc ? acc.nombre : 'Impuestos', email: op, ext: cfg.extOperativo, extCaja: cfg.extCaja }
   };
 }
 
 function confirmarPago(id) {
-  var u = exigirUsuario_([ROLES.OFICINA, ROLES.OPERATIVO]);
+  var u = exigirUsuario_();
   var r = buscarCaso(id);
   if (!r) throw new Error('Caso no encontrado.');
   verificarPropiedad_(u, r.caso);
   if (r.caso.status !== ESTADOS.APROBADO) throw new Error('Solo se puede confirmar el pago de un caso aprobado.');
   var nuevo = actualizarCaso(id, { status: ESTADOS.PAGADO, fechaPago: hoyIso() }, u.nombre, 'pago_completado');
-  try { enviarAvisoContabilidad(nuevo, true); } catch (err) { Logger.log('Correo pago: ' + err.message); }
+  try { enviarAvisoPago(nuevo, u); } catch (err) { Logger.log('Correo pago: ' + err.message); }
+  return nuevo;
+}
+
+/* ------------------------------ Fecha de vencimiento ------------------------------ */
+
+/**
+ * Cambia la fecha de vencimiento de un caso ya enviado (la oficina puede no conocerla al ingresar).
+ * Permitido a destinatarios y gestores mientras el caso esté Pendiente o Aprobado.
+ */
+function actualizarVencimiento(id, fecha) {
+  var u = exigirUsuario_();
+  var r = buscarCaso(id);
+  if (!r) throw new Error('Caso no encontrado.');
+  verificarPropiedad_(u, r.caso);
+  if (r.caso.status !== ESTADOS.PENDIENTE && r.caso.status !== ESTADOS.APROBADO) throw new Error('Este caso ya no admite cambios de fecha (' + r.caso.status + ').');
+  if (!parseFechaIso(fecha) || fecha < hoyIso()) throw new Error('La fecha de vencimiento debe ser válida y no puede ser anterior a hoy.');
+  var anterior = r.caso.vencimiento;
+  var nuevo = actualizarCaso(id, { vencimiento: fecha }, u.nombre, 'edicion_vencimiento');
+  actualizarEstadoAlerta_(id, 'Modificada', diasHasta(parseFechaIso(fecha)), fecha);
+  if (GESTORES.indexOf(u.rol) < 0) {
+    try { enviarCambioAlerta(nuevo, 'Vencimiento: ' + fechaLegible(anterior) + ' → ' + fechaLegible(fecha) + ' (cambio de ' + u.nombre + ')'); }
+    catch (err) { Logger.log('Correo vencimiento: ' + err.message); }
+  }
   return nuevo;
 }
 

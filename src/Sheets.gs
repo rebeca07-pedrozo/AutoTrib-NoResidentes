@@ -33,11 +33,18 @@ function crearPestañas() {
     var h = wb.getSheetByName(d[0]) || wb.insertSheet(d[0]);
     if (h.getLastRow() === 0) {
       h.getRange(1, 1, 1, d[1].length).setValues([d[1]])
-        .setBackground(COLORES.AZUL).setFontColor(COLORES.BLANCO).setFontWeight('bold');
+        .setBackground(COLORES.ROJO).setFontColor(COLORES.BLANCO).setFontWeight('bold');
       h.setFrozenRows(1);
       h.autoResizeColumns(1, d[1].length);
     }
   });
+
+  // CASOS_CDT: agrega columnas nuevas a hojas creadas con versiones anteriores
+  var hc = hoja(HOJAS.CDT), nCab = hc.getLastColumn();
+  if (nCab < CABECERAS.CDT.length) {
+    hc.getRange(1, nCab + 1, 1, CABECERAS.CDT.length - nCab).setValues([CABECERAS.CDT.slice(nCab)])
+      .setBackground(COLORES.ROJO).setFontColor(COLORES.BLANCO).setFontWeight('bold');
+  }
 
   // CONFIG: agrega los parámetros que falten (seguro de re-ejecutar tras una actualización)
   var cfg = hoja(HOJAS.CONFIG);
@@ -55,17 +62,17 @@ function crearPestañas() {
   if (acc.getLastRow() < 2) {
     var yo = Session.getEffectiveUser().getEmail();
     acc.getRange(2, 1, 3, 5).setValues([
-      [yo, 'Administrador (cambiar)', ROLES.OPERATIVO, 'Sí', 'Operaciones Tributarias'],
-      ['leydi@dav.com.co', 'Leydi Bernal', ROLES.OPERATIVO, 'Sí', 'Operaciones Tributarias'],
+      [yo, 'Administrador (cambiar)', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
+      ['leydi@dav.com.co', 'Leydi Y Librado Bernal', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
       ['pepito@dav.com.co', 'Pepito García', ROLES.OFICINA, 'Sí', 'Bogotá Centro']
     ]);
   }
 
   acc.getRange(2, 3, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation()
-    .requireValueInList([ROLES.OFICINA, ROLES.OPERATIVO, ROLES.CONTABILIDAD], true).setAllowInvalid(false).build());
+    .requireValueInList([ROLES.OFICINA, ROLES.OPERATIVO, ROLES.IMPUESTOS], true).setAllowInvalid(false).build());
   acc.getRange(2, 4, 500, 1).setDataValidation(SpreadsheetApp.newDataValidation()
     .requireValueInList(['Sí', 'No'], true).setAllowInvalid(false).build());
-  acc.getRange(1, 3).setNote('Roles: Oficina (por defecto), Operativo (aprueba), Contabilidad (solo lectura). Ver hoja ROLES.');
+  acc.getRange(1, 3).setNote('Roles: Oficina (por defecto), Operativo (gestiona), Impuestos (ingresa y gestiona). Ver hoja ROLES.');
 
   var fmtMoneda = '#,##0';
   var cdt = hoja(HOJAS.CDT);
@@ -196,8 +203,49 @@ function normalizarRol(r) {
   var s = String(r).trim().toLowerCase();
   if (s === 'oficina') return ROLES.OFICINA;
   if (s === 'operativo') return ROLES.OPERATIVO;
-  if (s === 'contabilidad') return ROLES.CONTABILIDAD;
+  if (s === 'impuestos') return ROLES.IMPUESTOS;
   return null;
+}
+
+/** Correos de los usuarios activos que gestionan casos (Operativo e Impuestos), sin repetir. */
+function correosGestores_() {
+  var out = [];
+  GESTORES.forEach(function (r) { correosPorRol(r).forEach(function (e) { if (out.indexOf(e.toLowerCase()) < 0) out.push(e.toLowerCase()); }); });
+  return out;
+}
+
+/** Correos destinatarios de un caso (oficinas a las que llegan los avisos). */
+function correosDelCaso_(caso) {
+  return String(caso.correosDestino || caso.emailOficina || '').split(/[;,\s]+/).filter(Boolean).map(function (e) { return e.toLowerCase(); });
+}
+
+function esDestinatario_(caso, email) {
+  return correosDelCaso_(caso).indexOf(String(email).toLowerCase()) >= 0;
+}
+
+/** Separa una lista de correos escrita libremente (coma, punto y coma, espacio o salto de línea). */
+function parsearCorreos_(valor) {
+  var lista = Array.isArray(valor) ? valor : String(valor || '').split(/[;,\s]+/);
+  var validos = [], invalidos = [];
+  lista.map(function (e) { return String(e).trim().toLowerCase(); }).filter(Boolean).forEach(function (e) {
+    var ok = /^[^\s@<>",;]+@[^\s@<>",;]+\.[^\s@<>",;]{2,}$/.test(e) &&
+      (!APP.VALIDAR_DOMINIO || new RegExp('@' + APP.DOMINIO.replace(/\./g, '\\.') + '$').test(e));
+    if (!ok) invalidos.push(e); else if (validos.indexOf(e) < 0) validos.push(e);
+  });
+  return { validos: validos, invalidos: invalidos };
+}
+
+/** Minúsculas y sin tildes, para comparar textos ("méxico" = "Mexico"). */
+function sinTildes_(s) {
+  return String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+/** País: si coincide (sin importar mayúsculas ni tildes) con la lista se usa el nombre oficial; si no, el texto tal cual. */
+function normalizarPais_(texto) {
+  var t = sinTildes_(texto);
+  if (!t) return '';
+  var hallado = PAISES.filter(function (p) { return sinTildes_(p) === t; })[0];
+  return hallado || limpiarTexto(texto, 60);
 }
 
 /** Correos de usuarios activos con un rol dado. */
@@ -218,6 +266,8 @@ function filaACaso(fila) {
     c[k] = CDT_FECHAS.indexOf(k) >= 0 ? fechaIso(v) : (v instanceof Date ? fechaIso(v) : v);
   });
   if (fila[1] instanceof Date) c.fechaIngestaHora = fechaHora(fila[1]);
+  if (c.formaPago === 'Débito' || c.formaPago === 'Transferencia') c.formaPago = 'Débito de cuenta';   // datos de versiones anteriores
+  if (!c.correosDestino) c.correosDestino = c.emailOficina;                                          // casos anteriores: solo la oficina que los ingresó
   return c;
 }
 

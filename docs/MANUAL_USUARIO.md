@@ -5,8 +5,8 @@ Abre el enlace que te compartió el administrador. El sistema identifica tu corr
 # Roles
 
 - **Oficina** (por defecto): ingresa CDT y ve solo sus casos.
-- **Operativo** (Leydi y administradores): aprueba, ajusta tarifa, alertas y reportes.
-- **Contabilidad**: solo lectura de casos aprobados y pagados.
+- **Operativo**: solo gestión (aprueba, ajusta tarifa, alertas y reportes).
+- **Impuestos** (Leydi Y Librado Bernal y su equipo): ingresa CDT en nombre de oficinas y gestiona.
 
 El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada uno.
 
@@ -24,13 +24,13 @@ El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada un
 
 ## Después de enviar
 
-1. Recibes un correo de confirmación y Leydi recibe el aviso.
-2. Cuando Leydi aprueba, te llega el correo **Caso aprobado - Instrucciones de pago** con un botón a la guía paso a paso (Débito, Efectivo o Transferencia).
-3. Marca cada paso y pulsa **Marcar como completado**. Contabilidad es notificada.
+1. Recibes un correo de confirmación y el equipo de Impuestos recibe el aviso.
+2. Cuando Impuestos aprueba, te llega el correo **Caso aprobado - Instrucciones de pago** con un botón a la guía paso a paso (Débito, Efectivo o Transferencia).
+3. Marca cada paso y pulsa **Marcar como completado**. El equipo de Impuestos es notificado.
 4. 5 días antes del vencimiento recibes una alerta: puedes **Editar datos** (fecha, forma de pago, notas) o **Confirmar vencimiento**.
 5. En **Mis casos** consultas el estado de todos tus casos.
 
-# Si eres Operativo (Leydi)
+# Si eres Operativo o Impuestos
 
 1. **Panel revisión**: filtra por estado, oficina o fechas. Toca un caso para abrir el detalle.
 
@@ -44,12 +44,19 @@ El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada un
 4. **Aprobar lote**: marca varios casos pendientes y aprueba con sus condiciones actuales.
 5. **Alertas**: vencimientos próximos y su estado. **Reportes**: resumen y descarga a Excel (CSV) o PDF (Imprimir).
 
-# Si eres Contabilidad
+# Solo Impuestos: ingresar en nombre de una oficina
 
-Ves únicamente los casos aprobados y pagados, con filtros y descarga de reporte, y recibes un correo cuando un caso queda listo para registro.
+El formulario trae el apartado **Destinatarios de las notificaciones**. Escribe los correos de las oficinas (separados por coma): todos los avisos de ese caso llegarán a ellas y no a ti. Opcionalmente escribe el nombre de la oficina. Cada oficina verá el caso en **Mis casos**.
+
+# Forma de pago: Débito de cuenta
+
+1. Nota débito (ND) a la cuenta de ahorros con **concepto 18** y **contrapartida ingreso 25**, por cada uno de los valores del caso.
+2. **Egreso 25 en efectivo** por el valor de la diferencia.
+3. Verificar comprobantes, guardar la referencia y marcar como completado.
 
 # Preguntas frecuentes
 
-- **¿Puedo editar un caso ya enviado?** No. Solo Operativo ajusta casos pendientes; la oficina puede cambiar fecha, forma de pago y notas desde la alerta de vencimiento.
+- **¿Puedo editar un caso ya enviado?** La fecha de vencimiento sí: abre el caso en **Mis casos** y usa *Editar fecha de vencimiento* (mientras esté Pendiente o Aprobado). El resto lo ajustan Impuestos u Operativo.
+- **¿El país es obligatorio?** No. Escríbelo sin tildes ni mayúsculas y elige de la lista.
 - **¿Se pueden borrar casos?** No. Los casos solo cambian de estado y todo cambio queda en la auditoría.
 - **¿Funciona en el celular?** Sí. El formulario y el panel están adaptados a pantallas pequeñas.

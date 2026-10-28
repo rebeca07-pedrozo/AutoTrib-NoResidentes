@@ -44,9 +44,9 @@ function verificarVencimientos() {
   return enviados;
 }
 
-/** Lista de alertas para el panel Operativo (con días recalculados). */
+/** Lista de alertas para el panel de gestión (con días recalculados). */
 function listarAlertas() {
-  exigirUsuario_([ROLES.OPERATIVO]);
+  exigirUsuario_(GESTORES);
   var h = hoja(HOJAS.ALERTAS);
   var n = h.getLastRow() - 1;
   if (n < 1) return [];
@@ -72,16 +72,16 @@ function actualizarEstadoAlerta_(id, status, dias, venc) {
 
 /** Datos del caso para la pantalla de alerta. */
 function obtenerAlertaCaso(id) {
-  var u = exigirUsuario_([ROLES.OFICINA, ROLES.OPERATIVO]);
+  var u = exigirUsuario_();
   var r = buscarCaso(id);
   if (!r) throw new Error('Caso no encontrado.');
   verificarPropiedad_(u, r.caso);
   return { caso: r.caso, dias: r.caso.vencimiento ? diasHasta(parseFechaIso(r.caso.vencimiento)) : null, hoy: hoyIso() };
 }
 
-/** La oficina edita fecha, forma de pago o notas. Notifica a Operativo y actualiza ALERTAS. */
+/** La oficina edita fecha, forma de pago o notas. Notifica a los gestores y actualiza ALERTAS. */
 function guardarAlertaCaso(id, d) {
-  var u = exigirUsuario_([ROLES.OFICINA, ROLES.OPERATIVO]);
+  var u = exigirUsuario_();
   var r = buscarCaso(id);
   if (!r) throw new Error('Caso no encontrado.');
   verificarPropiedad_(u, r.caso);
@@ -100,7 +100,7 @@ function guardarAlertaCaso(id, d) {
 }
 
 function confirmarVencimientoCaso(id) {
-  var u = exigirUsuario_([ROLES.OFICINA, ROLES.OPERATIVO]);
+  var u = exigirUsuario_();
   var r = buscarCaso(id);
   if (!r) throw new Error('Caso no encontrado.');
   verificarPropiedad_(u, r.caso);

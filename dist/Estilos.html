@@ -80,6 +80,11 @@ label{display:block;font-size:12px;font-weight:bold;color:#445;margin-bottom:5px
 .pref{position:relative} .pref span{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--gris);font-family:"Courier New",monospace;pointer-events:none}
 .pref input{padding-left:28px}
 
+.ac{position:relative}
+.ac-lista{position:absolute;left:0;right:0;top:100%;margin-top:2px;z-index:30;background:#fff;border:1px solid var(--borde);border-radius:8px;box-shadow:var(--sombra);max-height:260px;overflow:auto}
+.ac-item{padding:10px 12px;cursor:pointer} .ac-item.act,.ac-item:hover{background:var(--pri-cl);color:var(--pri-osc)}
+.campo textarea{resize:vertical}
+
 /* Cálculo */
 .calc{background:linear-gradient(135deg,var(--pri),var(--pri-osc));color:#fff;border-radius:12px;padding:18px 20px;margin-bottom:18px;box-shadow:var(--sombra)}
 .calc h3{color:#fff;border-color:rgba(255,255,255,.25)}

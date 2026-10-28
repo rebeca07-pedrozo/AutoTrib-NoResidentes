@@ -10,6 +10,7 @@ function crearEntorno(opts) {
     const filas = []; // filas[r][c]
     const h = {
       nombre, filas,
+      getLastColumn: () => Math.max(0, ...filas.map(f => (f || []).length)),
       getLastRow: () => { let n = 0; filas.forEach((f, i) => { if (f && f.some(v => v !== '' && v !== undefined)) n = i + 1; }); return n; },
       getRange(r, c, nr, nc) {
         nr = nr || 1; nc = nc || 1;
@@ -41,7 +42,7 @@ function crearEntorno(opts) {
     Session: { getActiveUser: () => ({ getEmail: () => estado.email }), getEffectiveUser: () => ({ getEmail: () => 'owner@dav.com.co' }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => (opts.props || {})[k] || null, setProperty() {} }) },
-    MailApp: { sendEmail: m => correos.push(m) },
+    MailApp: { sendEmail: m => { if (opts.mailFalla && m.noReply) throw new Error('noReply solo Workspace'); correos.push(JSON.parse(JSON.stringify(m, (k, v) => k === 'inlineImages' ? undefined : v))); } },
     Utilities: { base64Encode: b => Buffer.from(b).toString('base64'), formatDate: (d, tz, f) => {
       const p = n => String(n).padStart(2, '0');
       return f.replace('yyyy', d.getFullYear()).replace('MM', p(d.getMonth() + 1)).replace('dd', p(d.getDate())).replace('HH', p(d.getHours())).replace('mm', p(d.getMinutes())).replace('ss', p(d.getSeconds())).replace('SSS', String(d.getMilliseconds()).padStart(3, '0'));
