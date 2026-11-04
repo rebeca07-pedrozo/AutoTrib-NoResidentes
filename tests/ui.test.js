@@ -14,8 +14,8 @@ const IMG = CON_IMG ? {
 } : { logo: '', carga: '', triangulos: '', bienvenida: '' };
 
 const casos = [
-  { id: 'CDT001', fechaIngesta: '2026-10-15', cliente: 'Juan Pérez', idCliente: '123456', pais: 'Colombia', valorCdt: 5000000, rendimientos: 5000000, rete4: 200000, rete20: 1000000, diferencia: 800000, saldoNeto: 4000000, vencimiento: '2026-10-25', formaPago: 'Débito de cuenta', status: 'Pendiente', tarifa: 20, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' },
-  { id: 'CDT002', fechaIngesta: '2026-10-16', cliente: 'María López', idCliente: '234567', pais: 'Estados Unidos', valorCdt: 10000000, rendimientos: 10000000, rete4: 400000, rete20: 2000000, diferencia: 1600000, saldoNeto: 8000000, vencimiento: '2026-10-30', formaPago: 'Efectivo', status: 'Aprobado', tarifa: 20, notasLeydi: 'Bien', aprobadoPor: 'Leydi Bernal', fechaAprobacion: '2026-10-16', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' }
+  { id: 'CDT001', numeroCdt: '0012345678', estadoCdt: 'Activo', correosDestino: 'pepito@dav.com.co', fechaIngesta: '2026-10-15', cliente: 'Juan Pérez', idCliente: '123456', pais: 'Colombia', valorCdt: 5000000, rendimientos: 5000000, rete4: 200000, rete20: 1000000, diferencia: 800000, saldoNeto: 4000000, vencimiento: '2026-10-25', formaPago: 'Débito de cuenta', status: 'Pendiente', tarifa: 20, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' },
+  { id: 'CDT002', numeroCdt: '', estadoCdt: 'Cancelado', correosDestino: 'pepito@dav.com.co', fechaIngesta: '2026-10-16', cliente: 'María López', idCliente: '234567', pais: 'Estados Unidos', valorCdt: 10000000, rendimientos: 10000000, rete4: 400000, rete20: 2000000, diferencia: 1600000, saldoNeto: 8000000, vencimiento: '', formaPago: 'Efectivo', status: 'Aprobado', tarifa: 20, notasLeydi: 'Bien', aprobadoPor: 'Leydi Bernal', fechaAprobacion: '2026-10-16', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' }
 ];
 const usuario = rol === 'Oficina' ? { email: 'pepito@dav.com.co', nombre: 'Pepito García', rol, oficina: 'Bogotá Centro' } : { email: 'leydi@dav.com.co', nombre: 'Leydi Y Librado Bernal', rol, oficina: 'Impuestos' };
 
@@ -28,7 +28,8 @@ const R={
  obtenerResumen:()=>({pendientes:1,hoy:1,aprobados:1,total:2,recientes:[]}),
  guardarCaso:a=>({id:'CDT003',calculo:{}}),
  listarMisCasos:()=>D.casos, listarCasos:()=>D.casos,
- obtenerDetalleCaso:id=>({caso:D.casos.find(c=>c.id===id),auditoria:[{fecha:'15/10/2026 14:30',usuario:'Pepito García',accion:'ingesta',detalle:'Datos ingesta completos'}],config:{tarifaSistema:4}}),
+ actualizarCdt:(id,d)=>{const c=D.casos.find(x=>x.id===id); if(d.numeroCdt!==undefined)c.numeroCdt=d.numeroCdt; if(d.estadoCdt)c.estadoCdt=d.estadoCdt; if(c.estadoCdt==='Cancelado')c.vencimiento=''; else if(d.vencimiento!==undefined)c.vencimiento=d.vencimiento; return c;},
+ obtenerDetalleCaso:id=>({gestor:D.usuario.rol!=='Oficina',caso:D.casos.find(c=>c.id===id),auditoria:[{fecha:'15/10/2026 14:30',usuario:'Pepito García',accion:'ingesta',detalle:'Datos ingesta completos'}],config:{tarifaSistema:4}}),
  obtenerInstrucciones:id=>({caso:D.casos[1],contacto:{nombre:'Leydi Bernal',email:'leydi@dav.com.co',ext:'2345',extCaja:'1234'}}),
  obtenerImagenes:()=>(${JSON.stringify({ triangulos: IMG.triangulos, bienvenida: IMG.bienvenida })}),
  resolverCaso:()=>({}), listarAlertas:()=>[]
@@ -53,6 +54,7 @@ window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler
       await p.fill('#cliente', 'Juan Pérez'); await p.fill('#idCliente', '123456');
       await p.fill('#valorCdt', '5000000'); await p.fill('#rendimientos', '5000000'); await p.selectOption('#formaPago', 'Débito de cuenta');
       assert.deepStrictEqual(await p.$$eval('#formaPago option', o => o.map(x => x.textContent)), ['Selecciona...', 'Débito de cuenta', 'Efectivo']);
+      assert.strictEqual(await p.isVisible('#numeroCdt'), true, 'el número del CDT está en el formulario');
       assert.strictEqual(await p.inputValue('#valorCdt'), '5,000,000');
       assert.strictEqual(await p.textContent('[data-c=rete20]'), '$ 1,000,000');
       assert.strictEqual(await p.textContent('[data-c=diferencia]'), '$ 800,000');
@@ -62,7 +64,16 @@ window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler
         await p.fill('#correosDestino', 'bogota@dav.com.co, malo'); assert.ok(await p.isDisabled('#enviar'));
         await p.fill('#correosDestino', 'bogota@dav.com.co, cali@dav.com.co');
       }
+      assert.ok(await p.isDisabled('#enviar'), 'sin número de CDT no se puede enviar');
+      await p.fill('#numeroCdt', ' 0012 345678'); assert.strictEqual(await p.inputValue('#numeroCdt'), '0012345678', 'se normaliza el número');
       assert.ok(!(await p.isDisabled('#enviar')), 'país es opcional: el botón se habilita sin país');
+      // Activo: la fecha se puede escribir; Cancelado: se limpia, se deshabilita y deja de ser obligatoria; Activo otra vez: se habilita
+      await p.fill('#vencimiento', '2027-03-15'); assert.strictEqual(await p.isDisabled('#vencimiento'), false);
+      await p.click('label[for=estado-cancelado]'); assert.strictEqual(await p.isDisabled('#vencimiento'), true); assert.strictEqual(await p.inputValue('#vencimiento'), '');
+      assert.ok(!(await p.isDisabled('#enviar')), 'cancelado sin fecha: el formulario sigue válido');
+      assert.ok((await p.textContent('#c-vencimiento .msg')).includes('cancelado'));
+      await p.click('label[for=estado-activo]'); assert.strictEqual(await p.isDisabled('#vencimiento'), false);
+      await p.fill('#vencimiento', '2027-03-15');
       await p.fill('#pais', 'mexico');
       assert.strictEqual(await p.textContent('.ac-item.act'), 'México', 'autocompleta sin tildes ni mayúsculas');
       await p.keyboard.press('Enter'); assert.strictEqual(await p.inputValue('#pais'), 'México');
@@ -73,17 +84,44 @@ window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler
       await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-form.png`, fullPage: true });
       await p.click('#enviar'); await p.click('.velo [data-r="1"]'); await p.waitForSelector('text=enviado');
       const g = (await p.evaluate('window.__llamadas')).find(l => l[0] === 'guardarCaso'); assert.ok(g);
+      assert.strictEqual(g[1][0].numeroCdt, '0012345678'); assert.strictEqual(g[1][0].estadoCdt, 'Activo'); assert.strictEqual(g[1][0].vencimiento, '2027-03-15');
       assert.strictEqual(g[1][0].pais, 'España'); if (rol === 'Impuestos') assert.strictEqual(g[1][0].correosDestino, 'bogota@dav.com.co, cali@dav.com.co');
     }
     if (rol !== 'Oficina') {
       await p.click('[data-v=panel]'); await p.waitForSelector('table.t');
       await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-panel.png` });
-      await p.click('tr[data-id=CDT001]'); await p.waitForSelector('#d-tarifa');
+      // número del CDT visible en la tabla; histórico sin número se indica; cancelado marcado
+      assert.ok((await p.textContent('tr[data-id=CDT001]')).includes('0012345678'));
+      assert.ok((await p.textContent('tr[data-id=CDT002]')).includes('Sin número') && (await p.textContent('tr[data-id=CDT002]')).includes('Cancelado'));
+      await p.fill('#f-q', '00123'); assert.strictEqual(await p.$$eval('#tabla-panel tbody tr', r => r.length), 1, 'busca por número de CDT');
+      await p.fill('#f-q', ''); await p.selectOption('#f-cdt', 'Cancelado'); assert.strictEqual(await p.$$eval('#tabla-panel tbody tr', r => r.length), 1, 'filtra por estado del CDT');
+      await p.selectOption('#f-cdt', '');
+      await p.focus('tr[data-id=CDT001] button.link-btn'); await p.keyboard.press('Enter'); await p.waitForSelector('#d-tarifa');
+      assert.strictEqual(await p.getAttribute('.modal', 'role'), 'dialog', 'el detalle es un diálogo accesible');
+      assert.ok((await p.textContent('.cdt-titulo')).includes('0012345678') && (await p.textContent('.cdt-titulo')).includes('Activo'));
       await p.fill('#d-tarifa', '15');
       assert.strictEqual(await p.textContent('.modal [data-c=rete20]'), '$ 750,000');
       assert.strictEqual(await p.textContent('.modal [data-c=diferencia]'), '$ 550,000');
       await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-detalle.png` });
       await p.fill('#d-tarifa', '150'); assert.ok((await p.textContent('#d-banner')).includes('entre 0 y 100'));
+      await p.fill('#d-tarifa', '20');
+      // Activo → Cancelado → Activo desde el detalle
+      await p.fill('#e-venc', '2027-01-20'); await p.click('label[for=e-can]');
+      assert.strictEqual(await p.isDisabled('#e-venc'), true); assert.strictEqual(await p.inputValue('#e-venc'), '');
+      await p.click('[data-act=guardar-cdt]'); await p.waitForSelector('.cdt-titulo .chip.Cancelado');
+      const cc = (await p.evaluate('window.__llamadas')).filter(l => l[0] === 'actualizarCdt').pop(); assert.strictEqual(cc[1][1].estadoCdt, 'Cancelado'); assert.strictEqual(cc[1][1].vencimiento, undefined);
+      assert.ok((await p.textContent('tr[data-id=CDT001]')).includes('Cancelado'), 'la tabla se actualiza y el CDT cancelado sigue listado');
+      await p.click('label[for=e-act]'); assert.strictEqual(await p.isDisabled('#e-venc'), false); await p.fill('#e-venc', '2027-02-01');
+      await p.click('[data-act=guardar-cdt]'); await p.waitForSelector('.cdt-titulo .chip.Activo');
+      const aa = (await p.evaluate('window.__llamadas')).filter(l => l[0] === 'actualizarCdt').pop(); assert.strictEqual(aa[1][1].estadoCdt, 'Activo'); assert.strictEqual(aa[1][1].vencimiento, '2027-02-01');
+      await p.keyboard.press('Escape'); assert.strictEqual(await p.$$eval('.velo', v => v.length), 0, 'Escape cierra el diálogo');
+      assert.ok(await p.evaluate(() => document.activeElement && document.activeElement.classList.contains('link-btn')), 'el foco vuelve al número del CDT');
+      assert.strictEqual(await p.getAttribute('.nav [aria-current=page]', 'data-v'), 'panel');
+    }
+    // las imágenes siguen saliendo de la configuración existente (window.IMAGENES + obtenerImagenes)
+    if (CON_IMG) {
+      assert.ok((await p.getAttribute('.logo-img', 'src')).startsWith('data:image/svg+xml'), 'logo desde configuración');
+      assert.ok(await p.evaluate(() => document.documentElement.classList.contains('img-tri') && document.documentElement.classList.contains('img-bienv')), 'triángulos y fondo desde configuración');
     }
     await p.close();
   }

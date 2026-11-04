@@ -22,7 +22,13 @@ El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada un
 
 ![Formulario de ingesta con validación en tiempo real](img/Oficina-desktop-form.png)
 
-## Después de enviar
+## Número y estado del CDT
+
+- El **número del CDT** es obligatorio y es lo primero que ves en tablas y detalle.
+- **Activo** permite registrar la fecha del próximo vencimiento (opcional). **Cancelado** no pide fecha: el campo se desactiva. Un CDT cancelado **no se borra**: sigue en las consultas con su historial.
+- ¿No conoces la fecha todavía o te equivocaste en el número? Abre el caso en **Mis casos** y usa **Datos del CDT**: puedes agregar o corregir el número, cambiar entre Activo y Cancelado y poner la fecha cuando la tengas.
+
+# Después de enviar
 
 1. Recibes un correo de confirmación y el equipo de Impuestos recibe el aviso.
 2. Cuando Impuestos aprueba, te llega el correo **Caso aprobado - Instrucciones de pago** con un botón a la guía paso a paso (Débito, Efectivo o Transferencia).

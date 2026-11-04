@@ -78,6 +78,7 @@ function crearPestañas() {
   var cdt = hoja(HOJAS.CDT);
   [6, 7, 8, 9, 10, 11].forEach(function (c) { cdt.getRange(2, c, 2000, 1).setNumberFormat(fmtMoneda); });
   [2, 12, 18, 23].forEach(function (c) { cdt.getRange(2, c, 2000, 1).setNumberFormat('dd/MM/yyyy'); });
+  cdt.getRange(2, CDT_CLAVES.indexOf('numeroCdt') + 1, 2000, 1).setNumberFormat('@');   // texto: conserva ceros a la izquierda
   [HOJAS.CDT, HOJAS.AUDITORIA].forEach(function (n) {
     var p = hoja(n).protect();
     p.setDescription('Gestionada por AutoTrib');
@@ -267,6 +268,8 @@ function filaACaso(fila) {
   });
   if (fila[1] instanceof Date) c.fechaIngestaHora = fechaHora(fila[1]);
   if (c.formaPago === 'Débito' || c.formaPago === 'Transferencia') c.formaPago = 'Débito de cuenta';   // datos de versiones anteriores
+  c.numeroCdt = String(c.numeroCdt == null ? '' : c.numeroCdt).trim();                              // casos anteriores: sin número
+  if (c.estadoCdt !== ESTADOS_CDT.CANCELADO) c.estadoCdt = ESTADOS_CDT.ACTIVO;                       // casos anteriores: Activo
   if (!c.correosDestino) c.correosDestino = c.emailOficina;                                          // casos anteriores: solo la oficina que los ingresó
   return c;
 }

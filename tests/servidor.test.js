@@ -15,7 +15,7 @@ t('validación de dominio (opcional) bloquea correos externos', () => { c.APP.VA
 t('usuario inactivo no entra', () => { E.hojas.ACCESOS.appendRow(['inactivo@dav.com.co', 'Ina', 'Oficina', 'No', '']); como('inactivo@dav.com.co'); assert.strictEqual(c.iniciarSesion().ok, false); });
 t('Oficina entra y recibe rol', () => { como('pepito@dav.com.co'); const r = c.iniciarSesion(); assert.ok(r.ok); assert.strictEqual(r.usuario.rol, 'Oficina'); });
 
-const base = { cliente: 'Juan Pérez', idCliente: '123456', pais: 'mexico', valorCdt: 5000000, rendimientos: 5000000, formaPago: 'Débito de cuenta', vencimiento: '' };
+const base = { numeroCdt: '0012345678', estadoCdt: 'Activo', cliente: 'Juan Pérez', idCliente: '123456', pais: 'mexico', valorCdt: 5000000, rendimientos: 5000000, formaPago: 'Débito de cuenta', vencimiento: '' };
 let id;
 t('cálculo del ejemplo (rend 5M → 200K / 1M / 800K / 4M)', () => {
   const r = c.calcularRetenciones(5000000, 5000000, 20, 4);
@@ -210,27 +210,96 @@ t('dist/ (5 archivos) arranca solo y funciona sin src/', () => {
   assert.deepStrictEqual(JSON.parse(JSON.stringify(D.ctx.imagenesIniciales_())), { logo: '', carga: '' });
 });
 
+console.log('Número y estado del CDT');
+let idN;
+t('registra un CDT con número y fecha de vencimiento (el número conserva ceros a la izquierda)', () => {
+  como('pepito@dav.com.co'); const f = new Date(); f.setDate(f.getDate() + 30); const iso = c.fechaIso(f);
+  idN = c.guardarCaso(Object.assign({}, base, { numeroCdt: ' 0012345678 ', vencimiento: iso })).id;
+  const k = c.buscarCaso(idN).caso; assert.strictEqual(k.numeroCdt, '0012345678'); assert.strictEqual(k.estadoCdt, 'Activo'); assert.strictEqual(k.vencimiento, iso);
+  assert.ok(c.listarMisCasos().some(x => x.id === idN && x.numeroCdt === '0012345678'));
+  assert.ok(c.obtenerDetalleCaso(idN).caso.numeroCdt === '0012345678');
+});
+t('el número del CDT es obligatorio y se valida', () => {
+  sinErrores(() => c.guardarCaso(Object.assign({}, base, { numeroCdt: '' })), /número del CDT/);
+  sinErrores(() => c.guardarCaso(Object.assign({}, base, { numeroCdt: 'ab' })), /número del CDT/);
+  sinErrores(() => c.guardarCaso(Object.assign({}, base, { numeroCdt: '12 34 56' })), /número del CDT/);
+  sinErrores(() => c.guardarCaso(Object.assign({}, base, { numeroCdt: '=SUMA(1)' })), /número del CDT/);
+  assert.ok(c.guardarCaso(Object.assign({}, base, { numeroCdt: 'CDT-2026/778.1' })).id);
+});
+t('registra un CDT cancelado sin fecha: ignora cualquier fecha enviada y queda guardado', () => {
+  const f = new Date(); f.setDate(f.getDate() + 30);
+  const id = c.guardarCaso(Object.assign({}, base, { numeroCdt: '99887766', estadoCdt: 'Cancelado', vencimiento: c.fechaIso(f) })).id;
+  const k = c.buscarCaso(id).caso; assert.strictEqual(k.estadoCdt, 'Cancelado'); assert.strictEqual(k.vencimiento, '');
+  const id2 = c.guardarCaso(Object.assign({}, base, { numeroCdt: '99887755', estadoCdt: 'Cancelado', vencimiento: '' })).id;
+  assert.strictEqual(c.buscarCaso(id2).caso.estadoCdt, 'Cancelado');
+  sinErrores(() => c.guardarCaso(Object.assign({}, base, { estadoCdt: 'Anulado' })), /Activo o Cancelado/);
+});
+t('cambia Activo → Cancelado (limpia la fecha, sin borrar el caso) y de vuelta a Activo', () => {
+  const antes = c.buscarCaso(idN).caso;
+  const canc = c.actualizarCdt(idN, { estadoCdt: 'Cancelado' });
+  assert.strictEqual(canc.estadoCdt, 'Cancelado'); assert.strictEqual(canc.vencimiento, '');
+  assert.strictEqual(canc.cliente, antes.cliente); assert.strictEqual(canc.rendimientos, antes.rendimientos); assert.strictEqual(canc.numeroCdt, antes.numeroCdt);
+  assert.ok(c.obtenerAuditoria(idN).some(a => /estadoCdt: Activo → Cancelado/.test(a.detalle) && /vencimiento/.test(a.detalle)));
+  // cancelado: no admite fecha aunque la manden
+  const f = new Date(); f.setDate(f.getDate() + 15); const iso = c.fechaIso(f);
+  assert.strictEqual(c.actualizarCdt(idN, { estadoCdt: 'Cancelado', vencimiento: iso }).vencimiento, '');
+  const act = c.actualizarCdt(idN, { estadoCdt: 'Activo', vencimiento: iso });
+  assert.strictEqual(act.estadoCdt, 'Activo'); assert.strictEqual(act.vencimiento, iso);
+  assert.strictEqual(c.buscarCaso(idN).caso.vencimiento, iso);     // persistido en la hoja
+});
+t('los CDT cancelados siguen apareciendo en las consultas con toda su información', () => {
+  c.actualizarCdt(idN, { estadoCdt: 'Cancelado' });
+  assert.ok(c.listarMisCasos().some(x => x.id === idN && x.estadoCdt === 'Cancelado' && x.cliente === 'Juan Pérez'));
+  como('leydi@dav.com.co'); const todos = c.listarCasos({}); const k = todos.find(x => x.id === idN);
+  assert.ok(k && k.estadoCdt === 'Cancelado' && k.numeroCdt === '0012345678' && k.rendimientos === 5000000);
+  como('pepito@dav.com.co'); c.actualizarCdt(idN, { estadoCdt: 'Activo' });
+});
+t('un CDT cancelado no genera alertas ni se puede editar desde la alerta; se reactiva y vuelve', () => {
+  const f = new Date(); f.setDate(f.getDate() + 3); const iso = c.fechaIso(f);
+  como('pepito@dav.com.co'); const id = c.guardarCaso(Object.assign({}, base, { numeroCdt: 'ALERTA-001', vencimiento: iso })).id;
+  como('leydi@dav.com.co'); c.resolverCaso(id, 'aprobar', { tarifa: 20, formaPago: 'Efectivo' });
+  como('pepito@dav.com.co'); c.actualizarCdt(id, { estadoCdt: 'Cancelado' });
+  const antes = E.correos.length; c.verificarVencimientos();
+  assert.ok(!E.correos.slice(antes).some(m => /ALERTA-001|Vencimiento en/.test(m.subject + m.htmlBody) && /Vencimiento en/.test(m.subject) && m.htmlBody.includes('ALERTA-001')), 'sin alerta del cancelado');
+  sinErrores(() => c.guardarAlertaCaso(id, { vencimiento: iso, formaPago: 'Efectivo' }), /cancelado/);
+  como('leydi@dav.com.co'); assert.ok(!c.listarAlertas().some(a => a.id === id));
+  como('pepito@dav.com.co'); c.actualizarCdt(id, { estadoCdt: 'Activo', vencimiento: iso });
+  const antes2 = E.correos.length; c.verificarVencimientos();
+  assert.ok(E.correos.slice(antes2).some(m => /Vencimiento en/.test(m.subject) && m.htmlBody.includes('ALERTA-001')), 'al reactivar, vuelve la alerta');
+});
+t('número histórico: casos sin número siguen funcionando y se les puede agregar después', () => {
+  const fila = E.hojas.CASOS_CDT.filas;
+  const ix = fila.findIndex(f => f && f[0] === idN); const copia = fila[ix].slice(); copia[0] = 'CDT900'; copia[24] = ''; copia[25] = ''; copia[2] = 'Cliente Histórico';
+  fila[fila.length] = copia;
+  const h = c.buscarCaso('CDT900').caso; assert.strictEqual(h.numeroCdt, ''); assert.strictEqual(h.estadoCdt, 'Activo');
+  como('leydi@dav.com.co'); assert.strictEqual(c.actualizarCdt('CDT900', { numeroCdt: '5550001' }).numeroCdt, '5550001');
+  sinErrores(() => c.actualizarCdt('CDT900', { numeroCdt: '!' }), /número del CDT/);
+});
+t('permisos: una oficina ajena no puede editar el CDT', () => { como('otra@dav.com.co'); sinErrores(() => c.actualizarCdt(idN, { estadoCdt: 'Cancelado' }), /no pertenece/); como('pepito@dav.com.co'); });
+
 console.log('Alertas');
+let idAl;
+const estadoAlerta = id => E.hojas.ALERTAS.getDataRange().getValues().find(f => f[0] === id)[3];
 t('alerta se envía una sola vez para vencimiento en 5 días', () => {
   como('pepito@dav.com.co');
   const f = new Date(); f.setDate(f.getDate() + 5);
   const iso = c.fechaIso(f);
-  const x = c.guardarCaso(Object.assign({}, base, { vencimiento: iso })).id;
+  const x = c.guardarCaso(Object.assign({}, base, { numeroCdt: 'VENC-5D', vencimiento: iso })).id; idAl = x;
   como('leydi@dav.com.co'); c.resolverCaso(x, 'aprobar', { tarifa: 20, formaPago: 'Débito de cuenta', vencimiento: iso });
   const antes = E.correos.length;
   assert.strictEqual(c.verificarVencimientos(), 1);
   assert.ok(E.correos.slice(antes).some(m => /Vencimiento en 5 días/.test(m.subject)));
   assert.strictEqual(c.verificarVencimientos(), 0);
-  assert.strictEqual(E.hojas.ALERTAS.getRange(2, 4).getValues()[0][0], 'Enviada');
-  assert.strictEqual(c.listarAlertas()[0].dias, 5);
+  assert.strictEqual(estadoAlerta(idAl), 'Enviada');
+  assert.strictEqual(c.listarAlertas().find(a => a.id === idAl).dias, 5);
 });
 t('oficina edita desde la alerta → Modificada + aviso a Operativo', () => {
   como('pepito@dav.com.co');
   const f = new Date(); f.setDate(f.getDate() + 9); const iso = c.fechaIso(f);
-  const id2 = c.listarMisCasos().find(k => k.vencimiento).id;
+  const id2 = idAl;
   const antes = E.correos.length;
   c.guardarAlertaCaso(id2, { vencimiento: iso, formaPago: 'Efectivo', notas: 'Cambio' });
-  assert.strictEqual(E.hojas.ALERTAS.getRange(2, 4).getValues()[0][0], 'Modificada');
+  assert.strictEqual(estadoAlerta(id2), 'Modificada');
   assert.ok(E.correos.slice(antes).some(m => /Cambios en/.test(m.subject)));
   assert.ok(c.confirmarVencimientoCaso(id2));
 });

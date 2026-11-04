@@ -72,7 +72,7 @@ function enviar_(para, asunto, titulo, cuerpoHtml, textoPlano) {
 
 /** Confirmación a las oficinas destinatarias y aviso de caso nuevo a los gestores (sin repetir a quien digitó). */
 function enviarConfirmacionIngesta(caso, usuario) {
-  var datos = tablaDatos_([['Caso', caso.id], ['Cliente', caso.cliente], ['País', caso.pais || 'No indicado'],
+  var datos = tablaDatos_([['N.º CDT', caso.numeroCdt || 'Sin número'], ['Caso', caso.id], ['Cliente', caso.cliente], ['País', caso.pais || 'No indicado'],
     ['Rendimientos', pesos(caso.rendimientos)], ['Retención a cobrar', pesos(caso.diferencia)]]);
   enviar_(correosDelCaso_(caso), 'Caso ' + caso.id + ' recibido - En autorización', 'Caso ' + caso.id + ' enviado a autorización',
     '<p>Recibimos el caso de <b>' + esc(caso.cliente) + '</b> para la oficina <b>' + esc(caso.oficina || 'indicada') + '</b>. Les avisaremos cuando sea revisado.</p>' + datos +
@@ -84,7 +84,7 @@ function enviarConfirmacionIngesta(caso, usuario) {
 
 function enviarInstruccionesPago(caso) {
   var url = urlApp() + '?page=pago&case=' + encodeURIComponent(caso.id);
-  var datos = tablaDatos_([['Cliente', caso.cliente], ['Monto a cobrar', pesos(caso.diferencia)],
+  var datos = tablaDatos_([['N.º CDT', caso.numeroCdt || 'Sin número'], ['Cliente', caso.cliente], ['Monto a cobrar', pesos(caso.diferencia)],
     ['Vencimiento', fechaLegible(caso.vencimiento)], ['Forma de pago', caso.formaPago]]);
   enviar_(correosDelCaso_(caso), 'Caso #' + caso.id + ' Aprobado - Instrucciones de Pago', 'Caso ' + caso.id + ' aprobado',
     '<p>El caso <b>' + esc(caso.id) + '</b> fue <b style="color:' + COLORES.VERDE + '">APROBADO</b> por ' +
@@ -114,7 +114,7 @@ function enviarAlertaVencimiento(caso, dias) {
   enviar_(correosDelCaso_(caso), 'Vencimiento en ' + dias + ' días - CDT #' + caso.id + ' ' + caso.cliente,
     'Tu CDT ' + caso.id + ' vence en ' + dias + ' día' + (dias === 1 ? '' : 's'),
     '<p>Revisen el estado actual del caso:</p>' +
-    tablaDatos_([['Cliente', caso.cliente], ['Monto', pesos(caso.valorCdt)], ['Vencimiento', fechaLegible(caso.vencimiento)],
+    tablaDatos_([['N.º CDT', caso.numeroCdt || 'Sin número'], ['Cliente', caso.cliente], ['Monto', pesos(caso.valorCdt)], ['Vencimiento', fechaLegible(caso.vencimiento)],
       ['Forma de pago', caso.formaPago], ['Estado', caso.status]]) +
     '<p>Si necesitas cambiar algo:</p>' + boton_('Editar datos', urlEditar, COLORES.ROJO) +
     '<p>Si todo está correcto:</p>' + boton_('✓ Confirmar vencimiento', urlEditar + '&ok=1', COLORES.VERDE));

@@ -46,6 +46,27 @@ Cuando alguien con perfil **Impuestos** ingresa un CDT, el formulario tiene el a
 
 Todos los correos salen con el nombre **AutoTrib | Impuestos Davivienda** y con la opción `noReply: true` de Apps Script, que usa una dirección genérica *noreply* para que no aparezca tu foto ni tu correo. Se configura en `APP.NOMBRE_REMITENTE` (Config.gs). Limitaciones: `noReply` solo funciona en **Google Workspace**; en una cuenta Gmail personal Google la ignora y el sistema reintenta el envío sin esa opción (saldrá con el correo de quien despliega). Los destinatarios no pueden responder.
 
+## Número y estado del CDT
+
+- **Número del CDT** (obligatorio al ingresar): 3 a 30 caracteres (letras, números, guion, punto o barra). Se guarda como **texto** en la columna `Número CDT` de CASOS_CDT (conserva ceros a la izquierda). Es lo primero que se ve en las tablas, el detalle, los correos y las instrucciones de pago; el ID interno del caso (`CDT001`) queda como referencia secundaria. El panel de gestión permite **buscar por número**.
+- **Estado del CDT: Activo / Cancelado** (columna `Estado CDT`). Es independiente del estado del *trámite* (Pendiente, Aprobado, Pagado, Rechazado), que se sigue mostrando en la columna "Trámite".
+  - **Activo:** la fecha del próximo vencimiento es opcional y editable.
+  - **Cancelado:** el campo de fecha se deshabilita, se vacía y deja de ser obligatorio (frontend y backend); si llegara una fecha, el servidor la ignora. Cancelar **no borra** el caso: sigue en todas las consultas, con su historial y sus datos, marcado como Cancelado. No genera alertas de vencimiento (y su alerta pendiente se retira).
+  - **Volver a Activo** habilita de nuevo la fecha (opcional); la alerta de 5 días se recalcula con la nueva fecha.
+- **Editar después de enviar:** en *Mis casos* (oficinas destinatarias e Impuestos) y en el *Panel de gestión*, el detalle del caso tiene el bloque **Datos del CDT** para corregir el número, cambiar Activo/Cancelado y agregar o cambiar la fecha. Número y estado se pueden cambiar en cualquier estado del trámite; la fecha solo mientras esté Pendiente o Aprobado. Todo queda en el historial (`edicion_cdt`, con antes → después) y, si lo cambia una oficina, se avisa a los gestores. Backend: `actualizarCdt(id, datos)`.
+- **Datos históricos:** no hace falta migrar nada. Al re-ejecutar `inicializarSistema` se agregan las columnas `Número CDT` y `Estado CDT` al final de CASOS_CDT; los casos anteriores quedan **Activo** y "Sin número" (se destacan en la tabla y el número se agrega desde el detalle). Reportes (CSV) incluyen ambas columnas.
+- **Filtros del panel:** Trámite, Estado del CDT, Oficina, fechas y búsqueda por número, cliente o caso.
+
+## Diseño de la interfaz
+
+Pasada de diseño sobre `src/Estilos.html` y `src/Cliente.html` (la identidad sigue siendo rojo Davivienda dominante, sin emojis):
+
+- **Jerarquía:** el número del CDT es el dato protagonista (cifra monoespaciada grande en formulario y detalle, primera columna en tablas); estados como etiquetas con punto + texto (el color nunca es la única señal). Cifras de resumen en una sola franja en lugar de tarjetas sueltas.
+- **Formulario en dos columnas** (escritorio): datos a la izquierda y el **cálculo de retenciones fijo y siempre visible** a la derecha; en móvil el cálculo aparece justo después de "Inversión". Control segmentado Activo/Cancelado, mensajes de validación junto a cada campo (con ✓/✗, no solo color) y resumen antes de enviar.
+- **Sistema visual:** neutros cálidos, rojo para marca y acciones, sin degradados ni sombras en reposo, títulos en sentence case (sin mayúsculas diminutas con interletraje), cifras tabulares, transiciones cortas solo de color/opacidad/transformación.
+- **Accesibilidad:** enlace "Saltar al contenido", anillo de foco visible, `aria-current` en la navegación, tablas con `scope` y `caption`, diálogos con `role="dialog"`, foco atrapado y devuelto al cerrar, Escape cierra, avisos `role="status"/"alert"`, contraste AA (el gris `#999` se reemplazó), objetivos táctiles de 44 px, respeta `prefers-reduced-motion`.
+- **Imágenes:** sin cambios. Siguen cargándose por los mismos parámetros de CONFIG / Propiedades de script (`ID Imagen Logo`, `ID Imagen Triángulos`, `ID Imagen Fondo Bienvenida`, `ID Imagen Fondo Carga`) mediante `Imagenes.gs`; el cliente solo las aplica como variables CSS.
+
 ## Imágenes de marca (por ID de Drive)
 
 En la hoja **CONFIG** (o, alternativamente, en *Propiedades de script* del editor de Apps Script, con el mismo nombre del parámetro) pega el **ID** (o el enlace completo) de cada archivo de Google Drive; si queda vacío se usan el diseño rojo y triángulos por defecto.
@@ -117,7 +138,7 @@ Estados: `Pendiente → Aprobado → Pagado` o `Pendiente → Rechazado`. Nunca 
 
 ```bash
 npm install            # solo para la prueba de UI (Playwright)
-npm test               # 43 pruebas de lógica del servidor (roles, cálculo, correos, alertas)
+npm test               # 51 pruebas de lógica del servidor (roles, cálculo, correos, alertas)
 npm run test:ui        # formulario, validación en vivo y panel en Chromium (desktop + móvil)
 npm run manual         # regenera docs/Manual_Usuario_AutoTrib.pdf
 ```

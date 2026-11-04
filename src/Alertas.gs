@@ -25,7 +25,7 @@ function verificarVencimientos() {
 
   var enviados = 0;
   obtenerCasos(function (c) {
-    return c.vencimiento && c.status !== ESTADOS.RECHAZADO && c.status !== ESTADOS.PAGADO;
+    return c.vencimiento && c.estadoCdt !== ESTADOS_CDT.CANCELADO && c.status !== ESTADOS.RECHAZADO && c.status !== ESTADOS.PAGADO;
   }).forEach(function (c) {
     var dias = diasHasta(parseFechaIso(c.vencimiento));
     if (dias < 0 || dias > APP.DIAS_ALERTA) return;
@@ -50,10 +50,10 @@ function listarAlertas() {
   var h = hoja(HOJAS.ALERTAS);
   var n = h.getLastRow() - 1;
   if (n < 1) return [];
-  return h.getRange(2, 1, n, 4).getValues().filter(function (f) { return f[0]; }).map(function (f) {
+  return h.getRange(2, 1, n, 4).getValues().filter(function (f) { return f[0] && f[3] !== 'Cancelada'; }).map(function (f) {
     var c = buscarCaso(f[0]);
     return { id: f[0], vencimiento: fechaIso(f[1]), dias: f[1] instanceof Date ? diasHasta(f[1]) : f[2], status: f[3],
-      cliente: c ? c.caso.cliente : '', oficina: c ? c.caso.oficina : '' };
+      cliente: c ? c.caso.cliente : '', oficina: c ? c.caso.oficina : '', numeroCdt: c ? c.caso.numeroCdt : '' };
   });
 }
 
@@ -86,6 +86,7 @@ function guardarAlertaCaso(id, d) {
   if (!r) throw new Error('Caso no encontrado.');
   verificarPropiedad_(u, r.caso);
   if (r.caso.status === ESTADOS.RECHAZADO || r.caso.status === ESTADOS.PAGADO) throw new Error('Este caso ya no admite cambios.');
+  if (r.caso.estadoCdt === ESTADOS_CDT.CANCELADO) throw new Error('El CDT está cancelado: no tiene próximo vencimiento.');
   d = d || {};
   if (!d.vencimiento || !parseFechaIso(d.vencimiento) || d.vencimiento < hoyIso()) throw new Error('Fecha de vencimiento inválida.');
   var formaPago = FORMAS_PAGO.filter(function (f) { return f === d.formaPago; })[0];

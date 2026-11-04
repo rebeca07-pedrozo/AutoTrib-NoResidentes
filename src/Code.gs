@@ -111,6 +111,21 @@ function casoEsDe_(c, u) {
   return esDestinatario_(c, u.email) || (u.rol === ROLES.IMPUESTOS && c.ingresadoPor === u.nombre);
 }
 
+/* ------------------------------ Número y estado del CDT ------------------------------ */
+
+/** Número del CDT: letras, números y - . / (3 a 30 caracteres). Se guarda como texto. */
+function validarNumeroCdt_(valor) {
+  var n = limpiarTexto(valor, 30);
+  if (!/^[A-Za-z0-9][A-Za-z0-9\-\.\/]{2,29}$/.test(n)) throw new Error('El número del CDT no es válido (3 a 30 caracteres: letras, números, guion, punto o barra).');
+  return n;
+}
+
+function validarEstadoCdt_(valor) {
+  var e = valor === undefined || valor === '' || valor === null ? ESTADOS_CDT.ACTIVO : String(valor);
+  if (e !== ESTADOS_CDT.ACTIVO && e !== ESTADOS_CDT.CANCELADO) throw new Error('El estado del CDT debe ser Activo o Cancelado.');
+  return e;
+}
+
 /* ------------------------------ Ingesta (Oficina) ------------------------------ */
 
 function guardarCaso(d) {
@@ -118,20 +133,24 @@ function guardarCaso(d) {
   var cfg = obtenerConfig();
   d = d || {};
 
+  var numeroCdt = validarNumeroCdt_(d.numeroCdt);
+  var estadoCdt = validarEstadoCdt_(d.estadoCdt);
+  var cancelado = estadoCdt === ESTADOS_CDT.CANCELADO;
   var cliente = limpiarTexto(d.cliente, 120);
   var idCliente = limpiarTexto(d.idCliente, 20);
   var pais = normalizarPais_(d.pais);               // opcional, texto libre
   var valorCdt = Math.round(Number(d.valorCdt));
   var rendimientos = Math.round(Number(d.rendimientos));
   var formaPago = FORMAS_PAGO.filter(function (f) { return f === d.formaPago; })[0];
-  var venc = d.vencimiento ? parseFechaIso(d.vencimiento) : null;
+  var fechaVenc = cancelado ? '' : (d.vencimiento || '');       // un CDT cancelado no tiene próximo vencimiento
+  var venc = fechaVenc ? parseFechaIso(fechaVenc) : null;
 
   if (cliente.length < 3) throw new Error('El nombre del cliente es obligatorio.');
   if (!/^[A-Za-z0-9\-]{4,20}$/.test(idCliente)) throw new Error('El ID del cliente no es válido.');
   if (!(valorCdt > 0) || !(rendimientos > 0)) throw new Error('Valor CDT y rendimientos deben ser mayores a cero.');
   if (rendimientos > valorCdt) throw new Error('Los rendimientos no pueden superar el valor del CDT.');
   if (!formaPago) throw new Error('Selecciona la forma de pago.');
-  if (d.vencimiento && (!venc || d.vencimiento < hoyIso())) throw new Error('La fecha de vencimiento no es válida.');
+  if (fechaVenc && (!venc || fechaVenc < hoyIso())) throw new Error('La fecha de vencimiento no es válida.');
 
   // Destinatarios: una Oficina se notifica a sí misma; Impuestos indica a qué oficinas les llega todo.
   var destinos, oficina;
@@ -151,13 +170,13 @@ function guardarCaso(d) {
   var caso = {
     cliente: cliente, idCliente: idCliente, pais: pais, valorCdt: valorCdt, rendimientos: rendimientos,
     rete4: calc.rete4, rete20: calc.rete20, diferencia: calc.diferencia, saldoNeto: calc.saldoNeto,
-    vencimiento: d.vencimiento || '', formaPago: formaPago, status: ESTADOS.PENDIENTE,
+    vencimiento: fechaVenc, formaPago: formaPago, status: ESTADOS.PENDIENTE,
     tarifa: cfg.tarifaNoResidente, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '',
     oficina: oficina, ingresadoPor: u.nombre, emailOficina: destinos[0], notasOficina: '', fechaPago: '',
-    correosDestino: destinos.join(', ')
+    correosDestino: destinos.join(', '), numeroCdt: numeroCdt, estadoCdt: estadoCdt
   };
   var id = insertarCaso(caso);
-  registrarAuditoria(u.nombre, 'ingesta', id, 'Datos ingesta completos' + (u.rol === ROLES.IMPUESTOS ? '. Destinatarios: ' + caso.correosDestino : ''));
+  registrarAuditoria(u.nombre, 'ingesta', id, 'Datos ingesta completos. CDT ' + numeroCdt + ' (' + estadoCdt + ')' + (u.rol === ROLES.IMPUESTOS ? '. Destinatarios: ' + caso.correosDestino : ''));
   caso.id = id;
   try { enviarConfirmacionIngesta(caso, u); } catch (err) { Logger.log('Correo ingesta: ' + err.message); }
   return { id: id, calculo: calc };
@@ -215,7 +234,6 @@ function resolverCaso(id, accion, datos) {
   if (!(tarifa >= 0 && tarifa <= 100)) throw new Error('La tarifa debe estar entre 0 y 100.');
   var formaPago = FORMAS_PAGO.filter(function (f) { return f === d.formaPago; })[0];
   if (!formaPago) throw new Error('Selecciona la forma de pago.');
-  if (d.vencimiento && (!parseFechaIso(d.vencimiento))) throw new Error('Fecha de vencimiento inválida.');
   var notas = limpiarTexto(d.notas, 1000);
   if (accion === 'rechazar' && !notas) throw new Error('Indica el motivo del rechazo en las notas.');
   if (['guardar', 'aprobar', 'rechazar'].indexOf(accion) < 0) throw new Error('Acción no válida.');
@@ -224,7 +242,7 @@ function resolverCaso(id, accion, datos) {
   var calc = calcularRetenciones(c.rendimientos, c.valorCdt, tarifa, 0);
   var cambios = {
     tarifa: tarifa, rete20: calc.rete20, diferencia: calc.rete20 - c.rete4,
-    saldoNeto: calc.saldoNeto, formaPago: formaPago, vencimiento: d.vencimiento || '', notasLeydi: notas
+    saldoNeto: calc.saldoNeto, formaPago: formaPago, notasLeydi: notas
   };
   var tarifaCambio = Number(c.tarifa) !== tarifa;
 
@@ -292,24 +310,51 @@ function confirmarPago(id) {
 /* ------------------------------ Fecha de vencimiento ------------------------------ */
 
 /**
- * Cambia la fecha de vencimiento de un caso ya enviado (la oficina puede no conocerla al ingresar).
- * Permitido a destinatarios y gestores mientras el caso esté Pendiente o Aprobado.
+ * Edita los datos del certificado de un caso ya enviado: número, estado (Activo/Cancelado) y próximo vencimiento.
+ * - Cancelar NO borra el caso: queda en las consultas con su historial; se limpia el próximo vencimiento.
+ * - Un CDT cancelado no admite fecha; al reactivarlo la fecha vuelve a ser opcional.
+ * - Número y estado se pueden cambiar en cualquier estado del trámite; la fecha solo en Pendiente o Aprobado.
+ * Lo pueden usar las oficinas destinatarias y los gestores.
  */
-function actualizarVencimiento(id, fecha) {
+function actualizarCdt(id, datos) {
   var u = exigirUsuario_();
   var r = buscarCaso(id);
   if (!r) throw new Error('Caso no encontrado.');
   verificarPropiedad_(u, r.caso);
-  if (r.caso.status !== ESTADOS.PENDIENTE && r.caso.status !== ESTADOS.APROBADO) throw new Error('Este caso ya no admite cambios de fecha (' + r.caso.status + ').');
-  if (!parseFechaIso(fecha) || fecha < hoyIso()) throw new Error('La fecha de vencimiento debe ser válida y no puede ser anterior a hoy.');
-  var anterior = r.caso.vencimiento;
-  var nuevo = actualizarCaso(id, { vencimiento: fecha }, u.nombre, 'edicion_vencimiento');
-  actualizarEstadoAlerta_(id, 'Modificada', diasHasta(parseFechaIso(fecha)), fecha);
+  var d = datos || {}, c = r.caso, cambios = {};
+
+  if (d.numeroCdt !== undefined) cambios.numeroCdt = validarNumeroCdt_(d.numeroCdt);
+  var estado = d.estadoCdt !== undefined ? validarEstadoCdt_(d.estadoCdt) : c.estadoCdt;
+  if (estado !== c.estadoCdt) cambios.estadoCdt = estado;
+
+  if (estado === ESTADOS_CDT.CANCELADO) {
+    if (c.vencimiento) cambios.vencimiento = '';
+  } else if (d.vencimiento !== undefined && String(d.vencimiento) !== String(c.vencimiento)) {
+    if (c.status !== ESTADOS.PENDIENTE && c.status !== ESTADOS.APROBADO) throw new Error('Este caso ya no admite cambios de fecha (' + c.status + ').');
+    if (d.vencimiento !== '' && (!parseFechaIso(d.vencimiento) || d.vencimiento < hoyIso())) {
+      throw new Error('La fecha de vencimiento debe ser válida y no puede ser anterior a hoy.');
+    }
+    cambios.vencimiento = d.vencimiento;
+  }
+  if (!Object.keys(cambios).length) return c;
+
+  var nuevo = actualizarCaso(id, cambios, u.nombre, 'edicion_cdt');
+  if (nuevo.estadoCdt === ESTADOS_CDT.CANCELADO) actualizarEstadoAlerta_(id, 'Cancelada', '', '');
+  else if (cambios.vencimiento !== undefined) actualizarEstadoAlerta_(id, 'Modificada', cambios.vencimiento ? diasHasta(parseFechaIso(cambios.vencimiento)) : '', cambios.vencimiento);
+
   if (GESTORES.indexOf(u.rol) < 0) {
-    try { enviarCambioAlerta(nuevo, 'Vencimiento: ' + fechaLegible(anterior) + ' → ' + fechaLegible(fecha) + ' (cambio de ' + u.nombre + ')'); }
-    catch (err) { Logger.log('Correo vencimiento: ' + err.message); }
+    var partes = [];
+    if (cambios.numeroCdt !== undefined) partes.push('N.º CDT: ' + (c.numeroCdt || 'sin número') + ' → ' + cambios.numeroCdt);
+    if (cambios.estadoCdt !== undefined) partes.push('Estado del CDT: ' + c.estadoCdt + ' → ' + cambios.estadoCdt);
+    if (cambios.vencimiento !== undefined) partes.push('Vencimiento: ' + fechaLegible(c.vencimiento) + ' → ' + fechaLegible(cambios.vencimiento));
+    try { enviarCambioAlerta(nuevo, partes.join(' · ') + ' (cambio de ' + u.nombre + ')'); } catch (err) { Logger.log('Correo cambio CDT: ' + err.message); }
   }
   return nuevo;
+}
+
+/** Compatibilidad: cambia solo la fecha de vencimiento. */
+function actualizarVencimiento(id, fecha) {
+  return actualizarCdt(id, { vencimiento: fecha });
 }
 
 /* ------------------------------ Página ------------------------------ */

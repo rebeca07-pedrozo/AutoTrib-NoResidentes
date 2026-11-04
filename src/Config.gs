@@ -40,6 +40,9 @@ var GESTORES = [ROLES.OPERATIVO, ROLES.IMPUESTOS];
 /** Roles que pueden ingresar CDT. */
 var INGRESANTES = [ROLES.OFICINA, ROLES.IMPUESTOS];
 
+/** Estado del certificado (independiente del estado del trámite). Cancelar no borra el registro. */
+var ESTADOS_CDT = { ACTIVO: 'Activo', CANCELADO: 'Cancelado' };
+
 var ESTADOS = {
   PENDIENTE: 'Pendiente',
   APROBADO: 'Aprobado',
@@ -80,7 +83,7 @@ var CABECERAS = {
   CDT: ['ID Caso', 'Fecha Ingesta', 'Cliente', 'ID Cliente', 'País', 'Valor CDT', 'Rendimientos',
         'Rete4%', 'Rete20%', 'Diferencia', 'Saldo Neto', 'Vencimiento', 'Forma Pago', 'Status',
         'Tarifa%', 'Notas Leydi', 'Aprobado Por', 'Fecha Aprobación', 'Oficina', 'Ingresado Por',
-        'Email Oficina', 'Notas Oficina', 'Fecha Pago', 'Correos Destino'],
+        'Email Oficina', 'Notas Oficina', 'Fecha Pago', 'Correos Destino', 'Número CDT', 'Estado CDT'],
   ALERTAS: ['ID Caso', 'Fecha Vencimiento', 'Días para Vencer', 'Status'],
   AUDITORIA: ['Timestamp', 'Usuario', 'Acción', 'ID Caso', 'Detalle']
 };
@@ -88,7 +91,7 @@ var CABECERAS = {
 var CDT_CLAVES = ['id', 'fechaIngesta', 'cliente', 'idCliente', 'pais', 'valorCdt', 'rendimientos',
   'rete4', 'rete20', 'diferencia', 'saldoNeto', 'vencimiento', 'formaPago', 'status',
   'tarifa', 'notasLeydi', 'aprobadoPor', 'fechaAprobacion', 'oficina', 'ingresadoPor',
-  'emailOficina', 'notasOficina', 'fechaPago', 'correosDestino'];
+  'emailOficina', 'notasOficina', 'fechaPago', 'correosDestino', 'numeroCdt', 'estadoCdt'];
 
 var CDT_FECHAS = ['fechaIngesta', 'vencimiento', 'fechaAprobacion', 'fechaPago'];
 

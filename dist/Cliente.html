@@ -3,6 +3,7 @@
 (function () {
 'use strict';
 
+var APP_DIAS_ALERTA = 5;
 var S = { user: null, cfg: null, paises: [], formas: [], hoy: '', resumen: null, vista: '', casos: null, filtros: { estado: '', oficina: '' }, lote: null };
 var F = {}, TOCADO = {};
 
@@ -31,9 +32,10 @@ function api(fn) {
 function toast(msg, tipo) {
   var t = document.createElement('div');
   t.className = 'toast ' + (tipo || '');
+  t.setAttribute('role', tipo === 'err' ? 'alert' : 'status');
   t.textContent = msg;
   $('#toast-zona').appendChild(t);
-  setTimeout(function () { t.remove(); }, tipo === 'err' ? 6000 : 3500);
+  setTimeout(function () { t.remove(); }, tipo === 'err' ? 7000 : 3500);
 }
 
 function confirmar(titulo, html, textoBtn, claseBtn) {
@@ -42,8 +44,10 @@ function confirmar(titulo, html, textoBtn, claseBtn) {
     v.className = 'velo';
     v.innerHTML = '<div class="modal peq"><div class="modal-h"><h2>' + esc(titulo) + '</h2></div><div class="modal-b">' + html +
       '</div><div class="modal-p"><button class="btn sec" data-r="0">Cancelar</button><button class="btn ' + (claseBtn || '') + '" data-r="1">' + esc(textoBtn || 'Confirmar') + '</button></div></div>';
-    v.addEventListener('click', function (e) { var b = e.target.closest('[data-r]'); if (b) { v.remove(); res(b.dataset.r === '1'); } });
-    document.body.appendChild(v);
+    var fin = function (ok) { cerrarModal(v); res(ok); };
+    v._cancelar = function () { fin(false); };
+    v.addEventListener('click', function (e) { var b = e.target.closest('[data-r]'); if (b) fin(b.dataset.r === '1'); });
+    document.body.appendChild(v); montarModal(v);
   });
 }
 
@@ -81,10 +85,10 @@ var NAV = {
 };
 
 function marco(contenido) {
-  var nav = S.user ? (NAV[S.user.rol] || []).map(function (n) { return '<button data-act="ir" data-v="' + n[0] + '" class="' + (S.vista === n[0] ? 'act' : '') + '">' + n[1] + '</button>'; }).join('') : '';
-  return '<header class="cab"><div class="deco"></div><div class="cab-in"><div class="logo" data-act="ir" data-v="inicio">' + logoHtml() + '</div>' +
-    '<nav class="nav">' + nav + '</nav>' + (S.user ? '<div class="usuario">' + esc(S.user.nombre) + '<br>' + esc(S.user.rol) + '</div>' : '') + '</div></header>' +
-    '<main><div class="print-cab">BANCO DAVIVIENDA · AutoTrib No Residentes</div><div class="vista" id="vista">' + contenido + '</div></main>' +
+  var nav = S.user ? (NAV[S.user.rol] || []).map(function (n) { return '<button data-act="ir" data-v="' + n[0] + '"' + (S.vista === n[0] ? ' aria-current="page"' : '') + '>' + n[1] + '</button>'; }).join('') : '';
+  return '<a class="skip" href="#contenido">Saltar al contenido</a><header class="cab"><div class="deco"></div><div class="cab-in"><button class="logo" data-act="ir" data-v="inicio" aria-label="Davivienda AutoTrib, ir al inicio">' + logoHtml() + '</button>' +
+    '<nav class="nav" aria-label="Principal">' + nav + '</nav>' + (S.user ? '<div class="usuario">' + esc(S.user.nombre) + '<br>' + esc(S.user.rol) + '</div>' : '') + '</div></header>' +
+    '<main id="contenido" tabindex="-1"><div class="print-cab">BANCO DAVIVIENDA · AutoTrib No Residentes</div><div class="vista" id="vista">' + contenido + '</div></main>' +
     '<div class="pie">Banco Davivienda · AutoTrib · Conexión segura (HTTPS)</div>';
 }
 
@@ -101,9 +105,9 @@ function aplicarImagenes(im) {
   if (im.bienvenida) { root.style.setProperty('--img-bienvenida', 'url("' + im.bienvenida + '")'); root.classList.add('img-bienv'); }
 }
 
-function pintar(contenido) { $('#app').innerHTML = marco(contenido); window.scrollTo(0, 0); }
+function pintar(contenido) { $('#app').innerHTML = marco(contenido); window.scrollTo(0, 0); if (!$('.velo')) $('#contenido').focus({ preventScroll: true }); }
 
-function cargandoVista(txt) { return '<div class="cargando"><div class="spin az"></div><p>' + esc(txt || 'Cargando...') + '</p></div>'; }
+function cargandoVista(txt) { return '<div class="cargando" role="status"><div class="spin az"></div><p>' + esc(txt || 'Cargando...') + '</p></div>'; }
 
 function ir(v, extra) {
   S.vista = v;
@@ -115,14 +119,14 @@ function ir(v, extra) {
 /* ------------------------------ Login ------------------------------ */
 function splash(html) {
   var bg = (window.IMAGENES || {}).carga;
-  $('#app').innerHTML = '<div class="splash"' + (bg ? ' style="background-image:linear-gradient(135deg,rgba(228,31,19,.88),rgba(130,10,5,.92)),url(\'' + bg + '\')"' : '') + '><div class="deco"></div><div class="splash-in">' + html + '</div></div>';
+  $('#app').innerHTML = '<div class="splash"' + (bg ? ' style="--bg:url(\'' + bg + '\')"' : '') + '><div class="deco"></div><div class="splash-in" role="status">' + html + '</div></div>';
 }
 
 function arrancar() {
   splash((window.IMAGENES.logo ? '<img class="logo-img grande" alt="Davivienda" src="' + esc(window.IMAGENES.logo) + '">' : '<div class="wm grande">davivienda</div>') + '<h1>AutoTrib - No Residentes</h1><div>Banco Davivienda</div><div class="spin"></div><div>Identificando tu correo...</div><div style="opacity:.7;font-size:13px;margin-top:6px">Por favor espera...</div>');
   api('iniciarSesion').then(function (r) {
     if (!r.ok) {
-      splash('<div class="denegado"><h2>Acceso denegado</h2><p>' + esc(r.mensaje) + '</p>' + (r.email ? '<p style="color:#999;font-size:13px">Cuenta: ' + esc(r.email) + '</p>' : '') + '<p>Contacta al administrador.</p></div>');
+      splash('<div class="denegado"><h2>Acceso denegado</h2><p>' + esc(r.mensaje) + '</p>' + (r.email ? '<p class="hint">Cuenta: ' + esc(r.email) + '</p>' : '') + '<p>Contacta al administrador.</p></div>');
       return;
     }
     S.user = r.usuario; S.cfg = r.config; S.paises = r.paises; S.formas = r.formasPago; S.hoy = r.hoy; S.resumen = r.resumen;
@@ -138,71 +142,89 @@ function primerNombre() { return esc((S.user.nombre || '').split(' ')[0]); }
 function vInicio() {
   var u = S.user, r = S.resumen || {};
   var h;
+  var stat = function (n, t, alerta) { return '<div class="stat' + (alerta ? ' alerta' : '') + '"><div class="n">' + (n || 0) + '</div><div class="t">' + t + '</div></div>'; };
   if (!esGestor()) {
-    h = '<div class="hero"><div class="deco"></div><h1>¡Hola, ' + primerNombre() + '!</h1><p>Eres: <b>OFICINA</b> — ' + esc(u.oficina || 'Sin oficina asignada') + '</p>' +
+    h = '<div class="hero"><div class="deco"></div><h1>Hola, ' + primerNombre() + '</h1><p>Perfil <b>Oficina</b> · ' + esc(u.oficina || 'Sin oficina asignada') + '</p>' +
       '<ul class="pasos"><li>1. Completa los datos del CDT</li><li>2. El sistema calcula las retenciones</li><li>3. Se envía a Impuestos para autorizar</li><li>4. Recibe las instrucciones de pago</li></ul>' +
       '<div class="acciones"><button class="btn blanco" data-act="ir" data-v="ingresar">Ingresar CDT</button><button class="btn blanco" data-act="ir" data-v="mis">Ver mis casos</button><button class="btn blanco" data-act="ir" data-v="ayuda">Ayuda</button></div></div>' +
-      '<div class="kpis"><div class="kpi"><div class="n">' + (r.total || 0) + '</div><div class="t">Casos ingresados</div></div><div class="kpi rojo"><div class="n">' + (r.pendientes || 0) + '</div><div class="t">En autorización</div></div><div class="kpi verde"><div class="n">' + (r.aprobados || 0) + '</div><div class="t">Aprobados</div></div></div>';
+      '<div class="stats">' + stat(r.total, 'Casos ingresados') + stat(r.pendientes, 'En autorización', true) + stat(r.aprobados, 'Aprobados') + '</div>';
   } else {
     var imp = u.rol === 'Impuestos';
-    h = '<div class="hero"><div class="deco"></div><h1>¡Hola, ' + primerNombre() + '!</h1><p>Eres: <b>' + (imp ? 'IMPUESTOS — ingreso y gestión' : 'OPERATIVO — gestión') + '</b></p>' +
+    h = '<div class="hero"><div class="deco"></div><h1>Hola, ' + primerNombre() + '</h1><p>Perfil <b>' + (imp ? 'Impuestos' : 'Operativo') + '</b> · ' + (imp ? 'ingreso y gestión de casos' : 'gestión de casos') + '</p>' +
       '<div class="acciones">' + (imp ? '<button class="btn blanco" data-act="ir" data-v="ingresar">Ingresar CDT</button>' : '') +
       '<button class="btn blanco" data-act="ir" data-v="panel">Panel de gestión</button>' + (imp ? '<button class="btn blanco" data-act="ir" data-v="mis">Mis casos</button>' : '') +
       '<button class="btn blanco" data-act="ir" data-v="reportes">Reportes</button><button class="btn blanco" data-act="ir" data-v="alertas">Alertas</button></div></div>' +
-      '<div class="kpis"><div class="kpi rojo"><div class="n">' + (r.pendientes || 0) + '</div><div class="t">Casos pendientes</div></div><div class="kpi"><div class="n">' + (r.hoy || 0) + '</div><div class="t">Procesados hoy</div></div>' +
-      '<div class="kpi verde"><div class="n">' + (r.aprobados || 0) + '</div><div class="t">Aprobados</div></div></div>';
+      '<div class="stats">' + stat(r.pendientes, 'Pendientes de autorizar', true) + stat(r.hoy, 'Procesados hoy') + stat(r.aprobados, 'Aprobados') + '</div>';
   }
   $('#vista').innerHTML = h;
 }
 
 /* ------------------------------ Formulario CDT ------------------------------ */
 function vFormulario() {
-  F = { cliente: '', idCliente: '', pais: '', valorCdt: 0, rendimientos: 0, vencimiento: '', formaPago: '', correosDestino: '', oficina: '' }; TOCADO = {};
-  var imp = S.user.rol === 'Impuestos';
-  var u = S.user;
+  F = { numeroCdt: '', estadoCdt: 'Activo', cliente: '', idCliente: '', pais: '', valorCdt: 0, rendimientos: 0, vencimiento: '', formaPago: '', correosDestino: '', oficina: '' }; TOCADO = {};
+  var u = S.user, imp = u.rol === 'Impuestos';
   var recientes = (S.resumen && S.resumen.recientes) || [];
   $('#vista').innerHTML =
-    '<h1>Automatización CDT No Residentes</h1><p style="color:#666;margin:4px 0 18px">' + (imp ? 'Perfil: <b>Impuestos</b>' : 'Oficina: <b>' + esc(u.oficina || '—') + '</b>') + ' | Usuario: <b>' + esc(u.nombre) + '</b></p>' +
-    '<form id="f-cdt" autocomplete="off" novalidate>' +
-    '<div class="card"><h3>Datos básicos del cliente</h3><div class="grid2">' +
-    campo('cliente', 'Nombre cliente *', '<input id="cliente" maxlength="120" placeholder="Nombre completo">') +
-    campo('idCliente', 'ID cliente *', '<input id="idCliente" maxlength="20" placeholder="Documento / pasaporte" inputmode="text">') + '</div>' +
-    campo('pais', 'País (opcional)', '<div class="ac"><input id="pais" maxlength="60" placeholder="Escribe: mexico, españa, usa..." autocomplete="off"><div class="ac-lista oculto" id="ac-lista"></div></div>') + '</div>' +
-    (imp ? '<div class="card"><h3>Destinatarios de las notificaciones</h3><p style="margin:0 0 12px;color:#666;font-size:13px">Estás ingresando este caso en nombre de una oficina. Los correos de aprobación, rechazo, instrucciones de pago y alertas llegarán a los correos que escribas aquí, no a ti.</p>' +
+    '<div class="page-h"><div><h1>Ingresar CDT</h1><p>' + (imp ? 'Perfil Impuestos' : esc(u.oficina || 'Oficina')) + ' · ' + esc(u.nombre) + '. Los campos con * son obligatorios.</p></div></div>' +
+    '<form id="f-cdt" autocomplete="off" novalidate><div class="form-grid">' +
+
+    '<section class="card f-sec o1" aria-labelledby="t-cdt"><h3 id="t-cdt">Certificado (CDT)</h3><div class="grid2">' +
+      campo('numeroCdt', 'Número del CDT *', '<input id="numeroCdt" maxlength="30" placeholder="Ej: 0012345678" inputmode="text" autocapitalize="characters" spellcheck="false">', 'cdt-num') +
+      '<fieldset class="campo" id="c-estadoCdt"><legend>Estado del CDT *</legend><div class="seg">' +
+        '<input type="radio" name="estadoCdt" id="estado-activo" value="Activo" checked><label for="estado-activo">Activo</label>' +
+        '<input type="radio" name="estadoCdt" id="estado-cancelado" value="Cancelado"><label for="estado-cancelado">Cancelado</label>' +
+      '</div><div class="msg" id="m-estadoCdt"></div></fieldset></div>' +
+      campo('vencimiento', 'Fecha del próximo vencimiento (opcional)', '<input id="vencimiento" type="date" min="' + S.hoy + '">') + '</section>' +
+
+    '<section class="card f-sec o2" aria-labelledby="t-cli"><h3 id="t-cli">Cliente</h3><div class="grid2">' +
+      campo('cliente', 'Nombre del cliente *', '<input id="cliente" maxlength="120" placeholder="Nombre completo">') +
+      campo('idCliente', 'ID del cliente *', '<input id="idCliente" maxlength="20" placeholder="Documento o pasaporte" inputmode="text">') + '</div>' +
+      campo('pais', 'País (opcional)', '<div class="ac"><input id="pais" maxlength="60" placeholder="Escribe: mexico, españa, usa..." autocomplete="off" role="combobox" aria-expanded="false" aria-controls="ac-lista" aria-autocomplete="list"><div class="ac-lista oculto" id="ac-lista" role="listbox"></div></div>') + '</section>' +
+
+    (imp ? '<section class="card f-sec o3" aria-labelledby="t-dest"><h3 id="t-dest">Destinatarios de las notificaciones</h3><p class="hint" style="margin:-8px 0 14px">Estás ingresando este caso en nombre de una oficina. Los correos de aprobación, rechazo, instrucciones de pago y alertas llegarán a los correos que escribas aquí, no a ti.</p>' +
       campo('correosDestino', 'Correos de la(s) oficina(s) *', '<textarea id="correosDestino" rows="2" placeholder="oficina1@dav.com.co, oficina2@dav.com.co"></textarea>') +
-      campo('oficina', 'Nombre de la oficina (opcional)', '<input id="oficina" maxlength="80" placeholder="Ej: Bogotá Centro">') + '</div>' : '') +
-    '<div class="card"><h3>Inversión y rendimientos</h3><div class="grid2">' +
-    campo('valorCdt', 'Valor CDT ($) *', '<div class="pref"><span>$</span><input id="valorCdt" class="num" inputmode="numeric" placeholder="0"></div>') +
-    campo('rendimientos', 'Rendimientos ($) *', '<div class="pref"><span>$</span><input id="rendimientos" class="num" inputmode="numeric" placeholder="0"></div>') + '</div></div>' +
-    '<div id="caja-calc">' + cajaCalculo(calcular(0, 0, S.cfg.tarifaNoResidente, S.cfg.tarifaSistema), S.cfg.tarifaNoResidente) + '</div><div id="aviso-min"></div>' +
-    '<div class="card"><h3>Información adicional</h3><div class="grid2">' +
-    campo('vencimiento', 'Fecha próx. vencimiento (opcional)', '<input id="vencimiento" type="date" min="' + S.hoy + '">') +
-    campo('formaPago', 'Forma de pago *', '<select id="formaPago"><option value="">Selecciona...</option>' + S.formas.map(function (f) { return '<option>' + esc(f) + '</option>'; }).join('') + '</select>') + '</div></div>' +
-    '<div class="card"><h3>Contacto</h3><div class="grid2"><div class="campo"><label>Tu correo</label><input readonly value="' + esc(u.email) + '"></div><div class="campo"><label>Tu nombre completo</label><input readonly value="' + esc(u.nombre) + '"></div></div></div>' +
-    '<div class="card"><h3>Validación en tiempo real</h3><ul class="chk" id="chk"></ul><div id="banner" class="banner no"></div></div>' +
-    '<div class="barra"><button type="button" class="btn sec" data-act="ir" data-v="inicio">Cancelar</button><button type="submit" class="btn" id="enviar" disabled>Enviar a autorización</button></div></form>' +
-    '<div class="card" style="margin-top:22px"><h3>Últimos casos</h3>' + (recientes.length ? recientes.map(function (c) { return '<span class="chip ' + esc(c.status) + '" style="margin:3px" title="' + esc(c.cliente) + '">' + esc(c.id) + ' · ' + esc(c.status) + '</span>'; }).join('') : '<span style="color:#999">Aún no has ingresado casos.</span>') +
-    '<div class="barra"><button type="button" class="btn sec peq" data-act="ir" data-v="mis">Ver mis casos ingresados</button></div></div>';
-  $('#f-cdt').addEventListener('input', onInputForm);
-  $('#f-cdt').addEventListener('change', onInputForm);
-  $('#f-cdt').addEventListener('focusout', function (e) { if (e.target.id) { TOCADO[e.target.id] = true; revisar(); } });
-  $('#f-cdt').addEventListener('submit', enviarCaso);
+      campo('oficina', 'Nombre de la oficina (opcional)', '<input id="oficina" maxlength="80" placeholder="Ej: Bogotá Centro">') + '</section>' : '') +
+
+    '<section class="card f-sec o4" aria-labelledby="t-inv"><h3 id="t-inv">Inversión y rendimientos</h3><div class="grid2">' +
+      campo('valorCdt', 'Valor del CDT ($) *', '<div class="pref"><span>$</span><input id="valorCdt" class="num" inputmode="numeric" placeholder="0"></div>') +
+      campo('rendimientos', 'Rendimientos ($) *', '<div class="pref"><span>$</span><input id="rendimientos" class="num" inputmode="numeric" placeholder="0"></div>') + '</div><div id="aviso-min"></div></section>' +
+
+    '<aside class="f-calc" aria-label="Cálculo de retenciones"><div id="caja-calc">' + cajaCalculo(calcular(0, 0, S.cfg.tarifaNoResidente, S.cfg.tarifaSistema), S.cfg.tarifaNoResidente) + '</div></aside>' +
+
+    '<section class="card f-sec o6" aria-labelledby="t-pago"><h3 id="t-pago">Pago</h3>' +
+      campo('formaPago', 'Forma de pago *', '<select id="formaPago"><option value="">Selecciona...</option>' + S.formas.map(function (f) { return '<option>' + esc(f) + '</option>'; }).join('') + '</select>') +
+      '<div class="grid2"><div class="campo"><label for="ct-mail">Tu correo</label><input id="ct-mail" readonly value="' + esc(u.email) + '"></div><div class="campo"><label for="ct-nom">Tu nombre</label><input id="ct-nom" readonly value="' + esc(u.nombre) + '"></div></div></section>' +
+
+    '<section class="card f-sec o7" aria-labelledby="t-val"><h3 id="t-val">Revisión antes de enviar</h3><ul class="chk" id="chk"></ul><div id="banner" class="banner no" role="status" aria-live="polite"></div>' +
+      '<div class="barra"><button type="button" class="btn sec" data-act="ir" data-v="inicio">Cancelar</button><button type="submit" class="btn" id="enviar" disabled>Enviar a autorización</button></div></section>' +
+    '</div></form>' +
+    (recientes.length ? '<section class="card" style="margin-top:8px"><div class="card-h"><h3>Últimos casos</h3><button type="button" class="btn sec peq" data-act="ir" data-v="mis">Ver mis casos</button></div><div>' +
+      recientes.map(function (c) { return '<span class="chip ' + esc(c.status) + '" style="margin:3px 6px 3px 0" title="' + esc(c.cliente) + '">' + esc(c.numeroCdt || c.id) + ' · ' + esc(c.status) + '</span>'; }).join('') + '</div></section>' : '');
+  var f = $('#f-cdt');
+  f.addEventListener('input', onInputForm);
+  f.addEventListener('change', onInputForm);
+  f.addEventListener('focusout', function (e) { if (e.target.id) { TOCADO[e.target.id] = true; revisar(); } });
+  f.addEventListener('submit', enviarCaso);
   iniciarAutocompletar();
   revisar();
 }
 
-function campo(id, etiqueta, ctl) { return '<div class="campo" id="c-' + id + '"><label for="' + id + '">' + etiqueta + '</label>' + ctl + '<div class="msg"></div></div>'; }
+function campo(id, etiqueta, ctl, extra) { return '<div class="campo ' + (extra || '') + '" id="c-' + id + '"><label for="' + id + '">' + etiqueta + '</label>' + ctl + '<div class="msg" id="m-' + id + '"></div></div>'; }
 
 function onInputForm(e) {
   var t = e.target, id = t.id;
+  if (t.name === 'estadoCdt') { F.estadoCdt = t.value; revisar(); return; }
   if (id === 'valorCdt' || id === 'rendimientos') { t.value = fmtNum(t.value); F[id] = Number(soloDigitos(t.value)) || 0; }
+  else if (id === 'numeroCdt') { t.value = t.value.toUpperCase().replace(/\s+/g, ''); F.numeroCdt = t.value; }
   else if (id) F[id] = t.value;
   if (e.type === 'change') TOCADO[id] = true;
   revisar();
 }
 
 function validar() {
-  var v = {}, hoy = S.hoy;
+  var v = {}, hoy = S.hoy, cancelado = F.estadoCdt === 'Cancelado';
+  var nc = (F.numeroCdt || '').trim();
+  v.numeroCdt = !nc ? ['', 'Obligatorio'] : !/^[A-Za-z0-9][A-Za-z0-9\-\.\/]*$/.test(nc) ? ['bad', 'Solo letras, números, guion, punto o barra'] : nc.length < 3 ? ['warn', 'Mínimo 3 caracteres'] : ['ok', 'Válido'];
   var n = (F.cliente || '').trim();
   v.cliente = !n ? ['', 'Obligatorio'] : n.length < 3 ? ['warn', 'Incompleto'] : ['ok', 'Completo'];
   var d = (F.idCliente || '').trim();
@@ -215,46 +237,58 @@ function validar() {
   }
   v.valorCdt = !F.valorCdt ? ['', 'Ingresa el valor'] : ['ok', 'Numérico'];
   v.rendimientos = !F.rendimientos ? ['', 'Ingresa los rendimientos'] : F.valorCdt && F.rendimientos > F.valorCdt ? ['bad', 'No pueden superar el valor del CDT'] : !F.valorCdt ? ['warn', 'Ingresa primero el valor del CDT'] : ['ok', 'Numérico'];
-  v.vencimiento = !F.vencimiento ? ['ok', 'Opcional'] : F.vencimiento < hoy ? ['bad', 'Debe ser hoy o posterior'] : ['ok', 'Formato correcto'];
+  v.vencimiento = cancelado ? ['ok', 'No aplica: el CDT está cancelado'] : !F.vencimiento ? ['ok', 'Opcional'] : F.vencimiento < hoy ? ['bad', 'Debe ser hoy o posterior'] : ['ok', 'Formato correcto'];
   v.formaPago = F.formaPago ? ['ok', 'Elegida'] : ['', 'Selecciona una opción'];
   return v;
 }
 
-var ETIQ = { cliente: 'Nombre', idCliente: 'ID', pais: 'País', correosDestino: 'Destinatarios', valorCdt: 'Valor CDT', rendimientos: 'Rendimientos', vencimiento: 'Vencimiento', formaPago: 'Forma de pago' };
+var ETIQ = { numeroCdt: 'N.º CDT', cliente: 'Nombre', idCliente: 'ID', pais: 'País', correosDestino: 'Destinatarios', valorCdt: 'Valor CDT', rendimientos: 'Rendimientos', vencimiento: 'Vencimiento', formaPago: 'Forma de pago' };
 
 function revisar() {
+  var cancelado = F.estadoCdt === 'Cancelado';
+  var fv = $('#vencimiento');
+  if (fv) { fv.disabled = cancelado; if (cancelado) { fv.value = ''; F.vencimiento = ''; } }   // cancelado: sin fecha ni obligatoriedad
   var v = validar(), todoOk = true;
   Object.keys(v).forEach(function (k) {
     var est = v[k][0], mostrar = est === 'ok' || TOCADO[k] || est === 'warn' && F[k];
     if (est !== 'ok') todoOk = false;
     var c = $('#c-' + k);
-    if (c) { c.className = 'campo ' + (mostrar ? (est === '' ? 'bad' : est) : ''); $('.msg', c).textContent = mostrar ? (est === 'ok' ? '✓ ' : '') + v[k][1] : ''; }
+    if (c) {
+      c.classList.remove('ok', 'warn', 'bad'); var clase = mostrar ? (est === '' ? 'bad' : est) : ''; if (clase) c.classList.add(clase);
+      $('.msg', c).textContent = mostrar ? (est === 'ok' ? '✓ ' : est === 'bad' || est === '' ? '✗ ' : '') + v[k][1] : '';
+      var inp = $('#' + k, c); if (inp) { inp.setAttribute('aria-describedby', 'm-' + k); inp.setAttribute('aria-invalid', clase === 'bad' ? 'true' : 'false'); }
+    }
   });
+  $('#m-estadoCdt').textContent = cancelado ? 'El CDT cancelado se guarda en el historial, sin próximo vencimiento.' : '';
   $('#chk').innerHTML = Object.keys(v).map(function (k) {
-    var est = v[k][0]; return '<li class="' + est + '">' + (est === 'ok' ? '✓' : est === 'bad' ? '✗' : '•') + ' ' + ETIQ[k] + ': ' + esc(v[k][1]) + '</li>';
+    var est = v[k][0]; return '<li class="' + est + '"><span aria-hidden="true">' + (est === 'ok' ? '✓' : est === 'bad' ? '✗' : '•') + '</span> ' + ETIQ[k] + ': ' + esc(v[k][1]) + '</li>';
   }).join('');
   var b = $('#banner');
   b.className = 'banner ' + (todoOk ? 'ok' : 'no');
-  b.textContent = todoOk ? '✓ FORMULARIO VÁLIDO — Listo para enviar' : 'Completa los campos marcados para continuar';
+  b.textContent = todoOk ? '✓ Formulario válido: listo para enviar' : 'Completa los campos marcados para continuar';
   $('#enviar').disabled = !todoOk;
   var c2 = calcular(F.rendimientos || 0, F.valorCdt || 0, S.cfg.tarifaNoResidente, S.cfg.tarifaSistema);
   pintarCalculo($('#caja-calc'), c2, S.cfg.tarifaNoResidente);
   var min = S.cfg.montoMinimo;
-  $('#aviso-min').innerHTML = F.rendimientos && c2.rete20 < min ? '<div class="banner no">La retención calculada (' + money(c2.rete20) + ') es menor al monto mínimo de retención (' + money(min) + '). Impuestos lo evaluará.</div>' : '';
+  $('#aviso-min').innerHTML = F.rendimientos && c2.rete20 < min ? '<div class="banner info">La retención calculada (' + money(c2.rete20) + ') es menor al monto mínimo de retención (' + money(min) + '). Impuestos lo evaluará.</div>' : '';
 }
 
 function enviarCaso(e) {
   e.preventDefault();
   var btn = $('#enviar');
   var c = calcular(F.rendimientos, F.valorCdt, S.cfg.tarifaNoResidente, S.cfg.tarifaSistema);
-  confirmar('Enviar a autorización', '<p>Cliente: <b>' + esc(F.cliente) + '</b></p><p>Diferencia a cobrar: <b>' + money(c.diferencia) + '</b></p><p>Podrás editar la fecha de vencimiento después de enviarlo.</p>', 'Enviar', '').then(function (ok) {
+  var cancelado = F.estadoCdt === 'Cancelado';
+  confirmar('Enviar a autorización', '<p>CDT <b class="num">' + esc(F.numeroCdt) + '</b>' + (cancelado ? ' (cancelado)' : '') + '</p><p>Cliente: <b>' + esc(F.cliente) + '</b></p><p>Diferencia a cobrar: <b>' + money(c.diferencia) + '</b></p><p class="hint" style="margin-top:8px">Después de enviarlo podrás editar el número, el estado y la fecha de vencimiento desde Mis casos.</p>', 'Enviar', '').then(function (ok) {
     if (!ok) return;
     conCarga(btn, function () { return api('guardarCaso', F); }).then(function (r) {
       return api('obtenerResumen').then(function (rs) { S.resumen = rs; return r; });
     }).then(function (r) {
-      $('#vista').innerHTML = '<div class="card" style="text-align:center;padding:36px"><div style="font-size:54px;color:var(--pri)">✓</div><h1>Caso ' + esc(r.id) + ' enviado</h1><p>' + (S.user.rol === 'Impuestos' ? 'Las notificaciones de este caso llegarán a: <b>' + esc(F.correosDestino) + '</b>.' : 'El equipo de Impuestos recibió tu solicitud. Te llegará un correo con las instrucciones de pago cuando sea aprobado.') + '</p><p style="color:#666;font-size:13px">Si aún no conoces la fecha de vencimiento, puedes agregarla después desde Mis casos.</p>' +
+      $('#vista').innerHTML = '<div class="card" style="text-align:center;padding:36px 24px"><div style="font-size:48px;color:var(--ok);line-height:1" aria-hidden="true">✓</div><h1 style="margin-top:8px">CDT <span class="num">' + esc(F.numeroCdt) + '</span> enviado</h1>' +
+        '<p style="margin-top:6px;color:var(--ink-2)">Caso ' + esc(r.id) + ' · ' + chip(F.estadoCdt) + '</p>' +
+        '<p style="margin:14px auto 0;max-width:56ch">' + (S.user.rol === 'Impuestos' ? 'Las notificaciones de este caso llegarán a: <b>' + esc(F.correosDestino) + '</b>.' : 'El equipo de Impuestos recibió tu solicitud. Te llegará un correo con las instrucciones de pago cuando sea aprobado.') + '</p>' +
+        (!cancelado && !F.vencimiento ? '<p class="hint" style="margin-top:8px">Si aún no conoces la fecha de vencimiento, agrégala después desde Mis casos.</p>' : '') +
         '<div class="barra" style="justify-content:center"><button class="btn" data-act="ir" data-v="ingresar">Ingresar otro CDT</button><button class="btn sec" data-act="ir" data-v="mis">Ver mis casos</button></div></div>';
-      window.scrollTo(0, 0);
+      $('#contenido').focus({ preventScroll: true }); window.scrollTo(0, 0);
     }).catch(function (er) { toast(er.message, 'err'); });
   });
 }
@@ -293,21 +327,28 @@ function iniciarAutocompletar() {
 /* ------------------------------ Tablas de casos ------------------------------ */
 function chip(s) { return '<span class="chip ' + esc(s) + '">' + esc(s) + '</span>'; }
 
+/** Número del CDT bien visible; si el caso es histórico y no lo tiene, se indica. */
+function numCdt(c) { return c.numeroCdt ? '<span class="n">' + esc(c.numeroCdt) + '</span>' : '<span class="n sin">Sin número</span>'; }
+
 function tablaCasos(casos, opts) {
   opts = opts || {};
-  if (!casos.length) return '<div class="vacio">No hay casos para mostrar</div>';
-  return '<div class="tabla-w"><table class="t"><thead><tr>' + (opts.seleccion ? '<th><input type="checkbox" id="sel-todos" title="Seleccionar pendientes"></th>' : '') +
-    '<th>ID caso</th><th>Cliente</th><th class="ocmov">País</th><th class="m">Rendim.</th><th class="m">Rete</th><th class="m ocmov">Diferencia</th><th>Estado</th><th class="ocmov">Ingreso</th></tr></thead><tbody>' +
+  if (!casos.length) return '<div class="vacio"><strong>No hay casos para mostrar</strong>Prueba con otros filtros o ingresa un CDT nuevo.</div>';
+  return '<div class="tabla-w"><table class="t"><caption class="sr-only">Casos de CDT: toca el número para ver el detalle</caption><thead><tr>' + (opts.seleccion ? '<th scope="col" class="sel-c"><input type="checkbox" id="sel-todos" aria-label="Seleccionar todos los pendientes"></th>' : '') +
+    '<th scope="col">N.º CDT</th><th scope="col">Cliente</th><th scope="col" class="ocmov">País</th><th scope="col" class="m">Rendim.</th><th scope="col" class="m ocmov">Diferencia</th><th scope="col">Trámite</th><th scope="col">CDT</th><th scope="col" class="ocmov">Vence</th></tr></thead><tbody>' +
     casos.map(function (c) {
-      return '<tr class="clic" data-act="detalle" data-id="' + esc(c.id) + '">' + (opts.seleccion ? '<td>' + (c.status === 'Pendiente' ? '<input type="checkbox" class="sel" data-id="' + esc(c.id) + '">' : '') + '</td>' : '') +
-        '<td><b>#' + esc(c.id) + '</b></td><td>' + esc(c.cliente) + '</td><td class="ocmov">' + esc(c.pais || '—') + '</td><td class="m">' + corto(c.rendimientos) + '</td><td class="m">' + corto(c.rete20) + '</td><td class="m ocmov">' + corto(c.diferencia) + '</td><td>' + chip(c.status) + '</td><td class="ocmov">' + fecha(c.fechaIngesta) + '</td></tr>';
+      var canc = c.estadoCdt === 'Cancelado';
+      return '<tr class="clic' + (canc ? ' cancelado' : '') + '" data-act="detalle" data-id="' + esc(c.id) + '">' +
+        (opts.seleccion ? '<td class="sel-c">' + (c.status === 'Pendiente' ? '<input type="checkbox" class="sel" data-id="' + esc(c.id) + '" aria-label="Seleccionar caso ' + esc(c.id) + '">' : '') + '</td>' : '') +
+        '<td><div class="cdt-celda"><button type="button" class="link-btn" data-act="detalle" data-id="' + esc(c.id) + '" aria-label="Abrir CDT ' + esc(c.numeroCdt || 'sin número') + ', caso ' + esc(c.id) + '">' + numCdt(c) + '</button><span class="s">Caso ' + esc(c.id) + '</span></div></td>' +
+        '<td>' + esc(c.cliente) + '</td><td class="ocmov">' + esc(c.pais || '—') + '</td><td class="m">' + corto(c.rendimientos) + '</td><td class="m ocmov">' + corto(c.diferencia) + '</td>' +
+        '<td>' + chip(c.status) + '</td><td>' + chip(c.estadoCdt || 'Activo') + '</td><td class="ocmov">' + (canc ? '—' : fecha(c.vencimiento)) + '</td></tr>';
     }).join('') + '</tbody></table></div>';
 }
 
 function vMisCasos() {
   return api('listarMisCasos').then(function (casos) {
     S.casos = casos;
-    $('#vista').innerHTML = '<h1>Mis casos</h1><p style="color:#666;margin:4px 0 16px">Toca un caso para ver el detalle e instrucciones de pago.</p><div class="card">' + tablaCasos(casos) + '</div>';
+    $('#vista').innerHTML = '<div class="page-h"><div><h1>Mis casos</h1><p>Toca un caso para ver el detalle, editar el estado del CDT y su fecha de vencimiento, o abrir las instrucciones de pago.</p></div></div><div class="card">' + tablaCasos(casos) + '</div>';
   });
 }
 
@@ -316,90 +357,165 @@ function vPanel() {
 }
 
 function filtrados() {
+  var q = sinTildes(S.filtros.q || '');
   return (S.casos || []).filter(function (c) {
-    return (!S.filtros.estado || c.status === S.filtros.estado) && (!S.filtros.oficina || c.oficina === S.filtros.oficina) &&
-      (!S.filtros.desde || c.fechaIngesta >= S.filtros.desde) && (!S.filtros.hasta || c.fechaIngesta <= S.filtros.hasta);
+    return (!S.filtros.estado || c.status === S.filtros.estado) && (!S.filtros.estadoCdt || (c.estadoCdt || 'Activo') === S.filtros.estadoCdt) &&
+      (!S.filtros.oficina || c.oficina === S.filtros.oficina) &&
+      (!S.filtros.desde || c.fechaIngesta >= S.filtros.desde) && (!S.filtros.hasta || c.fechaIngesta <= S.filtros.hasta) &&
+      (!q || sinTildes([c.numeroCdt, c.cliente, c.id, c.idCliente].join(' ')).indexOf(q) >= 0);
   });
 }
 
 function opcionesFiltro() {
   var ofi = {}; (S.casos || []).forEach(function (c) { if (c.oficina) ofi[c.oficina] = 1; });
-  var estados = ['Pendiente', 'Aprobado', 'Pagado', 'Rechazado'];
-  return '<div class="filtros"><div class="campo"><label>Estado</label><select data-filtro="estado"><option value="">Todos</option>' + estados.map(function (e) { return '<option ' + (S.filtros.estado === e ? 'selected' : '') + '>' + e + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Oficina</label><select data-filtro="oficina"><option value="">Todas</option>' + Object.keys(ofi).sort().map(function (o) { return '<option ' + (S.filtros.oficina === o ? 'selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select></div>' +
-    '<div class="campo"><label>Desde</label><input type="date" data-filtro="desde" value="' + esc(S.filtros.desde || '') + '"></div>' +
-    '<div class="campo"><label>Hasta</label><input type="date" data-filtro="hasta" value="' + esc(S.filtros.hasta || '') + '"></div></div>';
+  var sel = function (clave, lista, todos) { return '<option value="">' + todos + '</option>' + lista.map(function (e) { return '<option ' + (S.filtros[clave] === e ? 'selected' : '') + '>' + esc(e) + '</option>'; }).join(''); };
+  return '<div class="filtros" role="search"><div class="campo busq"><label for="f-q">Buscar</label><input id="f-q" type="search" data-filtro="q" placeholder="N.º de CDT, cliente o caso" value="' + esc(S.filtros.q || '') + '"></div>' +
+    '<div class="campo"><label for="f-estado">Trámite</label><select id="f-estado" data-filtro="estado">' + sel('estado', ['Pendiente', 'Aprobado', 'Pagado', 'Rechazado'], 'Todos') + '</select></div>' +
+    '<div class="campo"><label for="f-cdt">Estado del CDT</label><select id="f-cdt" data-filtro="estadoCdt">' + sel('estadoCdt', ['Activo', 'Cancelado'], 'Todos') + '</select></div>' +
+    '<div class="campo"><label for="f-ofi">Oficina</label><select id="f-ofi" data-filtro="oficina">' + sel('oficina', Object.keys(ofi).sort(), 'Todas') + '</select></div>' +
+    '<div class="campo"><label for="f-desde">Desde</label><input id="f-desde" type="date" data-filtro="desde" value="' + esc(S.filtros.desde || '') + '"></div>' +
+    '<div class="campo"><label for="f-hasta">Hasta</label><input id="f-hasta" type="date" data-filtro="hasta" value="' + esc(S.filtros.hasta || '') + '"></div></div>';
 }
 
 function pintarPanel() {
-  var op = true, c = S.casos || [];
-  var pend = c.filter(function (x) { return x.status === 'Pendiente'; }).length, hoy = c.filter(function (x) { return x.fechaAprobacion === S.hoy; }).length;
-  var apr = c.filter(function (x) { return x.status === 'Aprobado' || x.status === 'Pagado'; }).length;
-  var lista = filtrados();
-  $('#vista').innerHTML = '<h1>' + 'Panel de gestión y autorización' + '</h1><p style="color:#666;margin:4px 0 0">' + esc(S.user.nombre) + ' | ' + esc(S.user.rol) + '</p>' +
-    '<div class="kpis">' + (op ? '<div class="kpi rojo"><div class="n">' + pend + '</div><div class="t">Pendientes</div></div><div class="kpi"><div class="n">' + hoy + '</div><div class="t">Hoy</div></div>' : '') + '<div class="kpi verde"><div class="n">' + apr + '</div><div class="t">Aprobados</div></div></div>' +
-    '<div class="card">' + opcionesFiltro() + '<div id="tabla-panel">' + tablaCasos(lista, { seleccion: op }) + '</div>' +
-    '<div class="barra"><button class="btn sec" data-act="csv">Descargar reporte</button>' + (op ? '<button class="btn verde" data-act="lote">Aprobar lote</button>' : '') + '<button class="btn sec" data-act="refrescar">Actualizar</button></div></div>';
+  var c = S.casos || [];
+  var n = function (fn) { return c.filter(fn).length; };
+  var pend = n(function (x) { return x.status === 'Pendiente'; }), hoy = n(function (x) { return x.fechaAprobacion === S.hoy; });
+  var apr = n(function (x) { return x.status === 'Aprobado' || x.status === 'Pagado'; }), canc = n(function (x) { return x.estadoCdt === 'Cancelado'; });
+  $('#vista').innerHTML = '<div class="page-h"><div><h1>Panel de gestión</h1><p>' + esc(S.user.nombre) + ' · ' + esc(S.user.rol) + '</p></div></div>' +
+    '<div class="stats"><div class="stat alerta"><div class="n">' + pend + '</div><div class="t">Pendientes de autorizar</div></div><div class="stat"><div class="n">' + hoy + '</div><div class="t">Procesados hoy</div></div>' +
+    '<div class="stat"><div class="n">' + apr + '</div><div class="t">Aprobados</div></div><div class="stat"><div class="n">' + canc + '</div><div class="t">CDT cancelados</div></div></div>' +
+    '<div class="card">' + opcionesFiltro() + '<div id="tabla-panel" aria-live="polite">' + tablaCasos(filtrados(), { seleccion: true }) + '</div>' +
+    '<div class="barra"><button class="btn verde" data-act="lote">Aprobar lote</button><button class="btn sec" data-act="csv">Descargar reporte</button><button class="btn sec" data-act="refrescar">Actualizar</button></div></div>';
+}
+
+/* ------------------------------ Modales accesibles ------------------------------ */
+var _mid = 0;
+
+/** role=dialog, foco dentro, Escape cierra, Tab no se escapa del diálogo, el foco vuelve a quien lo abrió. */
+function montarModal(velo) {
+  var m = $('.modal', velo), h = $('h2', velo);
+  if (h) { h.id = h.id || 'mh' + (++_mid); m.setAttribute('aria-labelledby', h.id); }
+  m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('tabindex', '-1');
+  velo._previo = document.activeElement; velo._previoId = velo._previo && velo._previo.dataset ? velo._previo.dataset.id : null;
+  velo.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.stopPropagation(); if (velo._cancelar) velo._cancelar(); else cerrarModal(velo); return; }
+    if (e.key !== 'Tab') return;
+    var f = $$('button,[href],input,select,textarea', m).filter(function (x) { return !x.disabled && x.offsetParent !== null && x.type !== 'hidden'; });
+    if (!f.length) return;
+    var ult = f[f.length - 1], pri = f[0];
+    if (e.shiftKey && (document.activeElement === pri || document.activeElement === m)) { e.preventDefault(); ult.focus(); }
+    else if (!e.shiftKey && document.activeElement === ult) { e.preventDefault(); pri.focus(); }
+  });
+  m.focus({ preventScroll: true });
+}
+function cerrarModal(velo) {
+  if (!velo) return;
+  var p = velo._previo; velo.remove();
+  if (p && document.body.contains(p)) p.focus({ preventScroll: true });
+  else {   // la lista se volvió a pintar: el foco vuelve al mismo caso, o al contenido
+    var otro = velo._previoId && $('button[data-act="detalle"][data-id="' + velo._previoId + '"]');
+    (otro || $('#contenido') || document.body).focus({ preventScroll: true });
+  }
 }
 
 /* ------------------------------ Detalle de caso ------------------------------ */
 function abrirDetalle(id) {
   var v = document.createElement('div'); v.className = 'velo'; v.id = 'modal-det';
-  v.innerHTML = '<div class="modal"><div class="modal-h"><h2>Detalle caso #' + esc(id) + '</h2><button data-act="cerrar" aria-label="Cerrar">×</button></div><div class="modal-b">' + cargandoVista() + '</div></div>';
-  document.body.appendChild(v);
-  api('obtenerDetalleCaso', id).then(function (r) { pintarDetalle(v, r); }).catch(function (e) { v.remove(); toast(e.message, 'err'); });
+  v.innerHTML = '<div class="modal"><div class="modal-h"><h2>Detalle del caso ' + esc(id) + '</h2><button class="x" data-act="cerrar" aria-label="Cerrar">×</button></div><div class="modal-b">' + cargandoVista() + '</div></div>';
+  document.body.appendChild(v); montarModal(v);
+  api('obtenerDetalleCaso', id).then(function (r) { pintarDetalle(v, r); }).catch(function (e) { cerrarModal(v); toast(e.message, 'err'); });
 }
 
 function dato(k, val) { return '<div class="dato"><span>' + k + '</span><b>' + val + '</b></div>'; }
 
 function pintarDetalle(v, r) {
   var c = r.caso, editable = esGestor() && c.status === 'Pendiente', sis = r.config.tarifaSistema;
+  var canc = c.estadoCdt === 'Cancelado', fechaAbierta = c.status === 'Pendiente' || c.status === 'Aprobado';
   var pct = c.rendimientos ? Math.round(c.rete4 / c.rendimientos * 1000) / 10 : sis;
   var calc = calcular(c.rendimientos, c.valorCdt, c.tarifa, pct);
   calc.rete4 = c.rete4;
-  var cuerpo = '<h3>Cliente</h3>' + dato('Nombre', esc(c.cliente)) + dato('ID', esc(c.idCliente)) + dato('País', esc(c.pais || '—')) + dato('Oficina', esc(c.oficina || '—')) + dato('Notificaciones a', esc(c.correosDestino || '—')) +
-    dato('Ingresado', esc(c.ingresadoPor) + ' | ' + fecha(c.fechaIngesta)) +
-    '<h3 style="margin-top:16px">Inversión y rendimientos</h3>' + dato('Valor CDT', money(c.valorCdt)) + dato('Rendimientos', money(c.rendimientos)) +
+  var notaFecha = canc ? 'Un CDT cancelado no tiene próximo vencimiento.' : !fechaAbierta ? 'El trámite ya está cerrado: la fecha no se puede cambiar.' : 'Puedes agregarla o cambiarla cuando la conozcas.';
+
+  var cabecera = '<div><h2 class="sr-only">Detalle del CDT ' + esc(c.numeroCdt || 'sin número') + '</h2><div class="cdt-titulo" aria-hidden="false">' + numCdt(c) + chip(c.estadoCdt) + chip(c.status) + '</div>' +
+    '<div class="sub">Caso ' + esc(c.id) + ' · ' + esc(c.cliente) + '</div></div><button class="x" data-act="cerrar" aria-label="Cerrar">×</button>';
+
+  var bloqueCdt = '<h3>Datos del CDT</h3><div class="bloque-cdt"><div class="grid2">' +
+    '<div class="campo cdt-num"><label for="e-num">Número del CDT</label><input id="e-num" maxlength="30" value="' + esc(c.numeroCdt) + '" placeholder="' + (c.numeroCdt ? '' : 'Agrega el número') + '" autocapitalize="characters" spellcheck="false"><div class="msg"></div></div>' +
+    '<fieldset class="campo"><legend>Estado del CDT</legend><div class="seg"><input type="radio" name="e-estado" id="e-act" value="Activo"' + (canc ? '' : ' checked') + '><label for="e-act">Activo</label>' +
+    '<input type="radio" name="e-estado" id="e-can" value="Cancelado"' + (canc ? ' checked' : '') + '><label for="e-can">Cancelado</label></div><div class="msg"></div></fieldset></div>' +
+    '<div class="campo"><label for="e-venc">Fecha del próximo vencimiento</label><input id="e-venc" type="date" min="' + S.hoy + '" value="' + esc(canc ? '' : c.vencimiento) + '"' + (canc || !fechaAbierta ? ' disabled' : '') + ' data-abierta="' + (fechaAbierta ? '1' : '0') + '"><div class="msg" id="e-nota">' + notaFecha + '</div></div>' +
+    '<div class="barra" style="margin:0 0 14px"><button class="btn peq" data-act="guardar-cdt" data-id="' + esc(c.id) + '">Guardar datos del CDT</button></div></div>';
+
+  var cuerpo = bloqueCdt +
+    '<h3>Cliente</h3>' + dato('Nombre', esc(c.cliente)) + dato('ID', esc(c.idCliente)) + dato('País', esc(c.pais || '—')) + dato('Oficina', esc(c.oficina || '—')) + dato('Notificaciones a', esc(c.correosDestino || '—')) +
+    dato('Ingresado', esc(c.ingresadoPor) + ' · ' + fecha(c.fechaIngesta)) +
+    '<h3>Inversión y rendimientos</h3>' + dato('Valor CDT', money(c.valorCdt)) + dato('Rendimientos', money(c.rendimientos)) +
     '<div style="margin-top:14px"></div>' +
     cajaCalculo(calc, c.tarifa, { claro: true, titulo: 'Cálculo actual' + (editable ? ' (editable)' : ''), tarifaSis: pct,
-      editable: editable ? '<div class="fila"><span>Tarifa a aplicar (%)</span><span><input id="d-tarifa" class="num" type="number" min="0" max="100" step="0.5" value="' + esc(c.tarifa) + '" style="width:90px;padding:8px;border:2px solid var(--pri);border-radius:8px;text-align:right"></span></div>' : '' }) +
-    '<h3>Autorización</h3><div class="grid2"><div class="campo"><label>Estado</label><div>' + chip(c.status) + '</div></div>' +
-    '<div class="campo"><label>Forma de pago</label>' + (editable ? '<select id="d-forma">' + S.formas.map(function (f) { return '<option ' + (f === c.formaPago ? 'selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select>' : '<b>' + esc(c.formaPago) + '</b>') + '</div>' +
-    '<div class="campo"><label>Vencimiento</label>' + (editable ? '<input id="d-venc" type="date" value="' + esc(c.vencimiento) + '">' : '<b>' + fecha(c.vencimiento) + '</b>') + '</div></div>' +
-    (!editable && (c.status === 'Pendiente' || c.status === 'Aprobado') ? '<div class="campo"><label>Editar fecha de vencimiento</label><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="v-venc" type="date" min="' + S.hoy + '" value="' + esc(c.vencimiento) + '" style="flex:1;min-width:160px;padding:10px;border:2px solid var(--borde);border-radius:8px"><button class="btn peq" data-act="guardar-venc" data-id="' + esc(c.id) + '">Guardar fecha</button></div><div class="msg" style="font-size:12px;color:#777;margin-top:4px">Puedes agregarla o cambiarla cuando la conozcas.</div></div>' : '') +
-    (c.notasOficina ? dato('Notas oficina', esc(c.notasOficina)) : '') +
-    '<div class="campo"><label>Notas' + (editable ? ' (obligatorias para rechazar)' : '') + '</label>' + (editable ? '<textarea id="d-notas" rows="3" maxlength="1000">' + esc(c.notasLeydi) + '</textarea>' : '<div>' + (esc(c.notasLeydi) || '—') + '</div>') + '</div>' +
-    (c.aprobadoPor ? dato(c.status === 'Rechazado' ? 'Rechazado por' : 'Aprobado por', esc(c.aprobadoPor) + ' | ' + fecha(c.fechaAprobacion)) : '') +
-    '<h3 style="margin-top:16px">Auditoría</h3><ul class="aud">' + (r.auditoria.length ? r.auditoria.map(function (a) { return '<li><b>' + esc(a.fecha) + '</b> | ' + esc(a.usuario) + ' — ' + esc(a.accion) + (a.detalle ? '<br><span style="color:#777">' + esc(a.detalle) + '</span>' : '') + '</li>'; }).join('') : '<li>Sin registros</li>') + '</ul>' +
-    (editable ? '<div id="d-banner" class="banner ok">✓ FORMULARIO VÁLIDO — Listo para autorizar</div>' : '');
+      editable: editable ? '<div class="fila"><label for="d-tarifa" style="margin:0">Tarifa a aplicar (%)</label><input id="d-tarifa" class="num" type="number" min="0" max="100" step="0.5" value="' + esc(c.tarifa) + '" style="width:96px;min-height:44px;padding:8px;border:2px solid var(--pri);border-radius:var(--r);text-align:right;font-size:16px"></div>' : '' }) +
+    '<h3>Autorización</h3><div class="grid2"><div class="campo"><span class="lbl">Forma de pago</span>' + (editable ? '<select id="d-forma" aria-label="Forma de pago">' + S.formas.map(function (f) { return '<option ' + (f === c.formaPago ? 'selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select>' : '<b>' + esc(c.formaPago) + '</b>') + '</div></div>' +
+    (c.notasOficina ? dato('Notas de la oficina', esc(c.notasOficina)) : '') +
+    '<div class="campo"><label for="d-notas">Notas' + (editable ? ' (obligatorias para rechazar)' : '') + '</label>' + (editable ? '<textarea id="d-notas" rows="3" maxlength="1000">' + esc(c.notasLeydi) + '</textarea>' : '<div id="d-notas">' + (esc(c.notasLeydi) || '—') + '</div>') + '</div>' +
+    (c.aprobadoPor ? dato(c.status === 'Rechazado' ? 'Rechazado por' : 'Aprobado por', esc(c.aprobadoPor) + ' · ' + fecha(c.fechaAprobacion)) : '') +
+    '<h3>Historial</h3><ul class="aud">' + (r.auditoria.length ? r.auditoria.map(function (a) { return '<li><b>' + esc(a.fecha) + '</b> · ' + esc(a.usuario) + ' · ' + esc(a.accion) + (a.detalle ? '<br><span>' + esc(a.detalle) + '</span>' : '') + '</li>'; }).join('') : '<li>Sin registros</li>') + '</ul>' +
+    (editable ? '<div id="d-banner" class="banner ok" role="status" aria-live="polite">✓ Listo para autorizar</div>' : '');
+
   var pie = editable
-    ? '<button class="btn sec" data-act="cerrar">Cancelar</button><button class="btn sec" data-act="resolver" data-a="guardar" data-id="' + esc(c.id) + '">Guardar ajustes</button><button class="btn rojo" data-act="resolver" data-a="rechazar" data-id="' + esc(c.id) + '">Rechazar</button><button class="btn verde" data-act="resolver" data-a="aprobar" data-id="' + esc(c.id) + '">Aprobar</button>'
+    ? '<button class="btn sec" data-act="cerrar">Cerrar</button><button class="btn sec" data-act="resolver" data-a="guardar" data-id="' + esc(c.id) + '">Guardar ajustes</button><button class="btn rojo" data-act="resolver" data-a="rechazar" data-id="' + esc(c.id) + '">Rechazar</button><button class="btn verde" data-act="resolver" data-a="aprobar" data-id="' + esc(c.id) + '">Aprobar</button>'
     : ((c.status === 'Aprobado' || c.status === 'Pagado') ? '<button class="btn" data-act="ir-pago" data-id="' + esc(c.id) + '">Ver instrucciones de pago</button>' : '') + '<button class="btn sec" data-act="cerrar">Cerrar</button>';
-  $('.modal', v).innerHTML = '<div class="modal-h"><h2>Detalle caso #' + esc(c.id) + '</h2><button data-act="cerrar" aria-label="Cerrar">×</button></div><div class="modal-b">' + cuerpo + '</div><div class="modal-p">' + pie + '</div>';
+  $('.modal', v).innerHTML = '<div class="modal-h">' + cabecera + '</div><div class="modal-b">' + cuerpo + '</div><div class="modal-p">' + pie + '</div>';
+  $('.modal', v).setAttribute('aria-labelledby', $('h2', v).id = $('h2', v).id || 'mh' + (++_mid));
   v.dataset.rete4 = c.rete4; v.dataset.rend = c.rendimientos; v.dataset.cdt = c.valorCdt;
+
+  // Activo / Cancelado: al cancelar se limpia y deshabilita la fecha; al reactivar vuelve a poder editarse
+  $$('input[name="e-estado"]', v).forEach(function (rd) {
+    rd.addEventListener('change', function () {
+      var cancel = $('#e-can', v).checked, fe = $('#e-venc', v), abierta = fe.dataset.abierta === '1';
+      fe.disabled = cancel || !abierta; if (cancel) fe.value = '';
+      $('#e-nota', v).textContent = cancel ? 'Un CDT cancelado no tiene próximo vencimiento.' : !abierta ? 'El trámite ya está cerrado: la fecha no se puede cambiar.' : 'Puedes agregarla o cambiarla cuando la conozcas.';
+    });
+  });
+  var enm = $('#e-num', v); if (enm) enm.addEventListener('input', function () { enm.value = enm.value.toUpperCase().replace(/\s+/g, ''); });
+
   var inp = $('#d-tarifa', v);
   if (inp) inp.addEventListener('input', function () {
     var t = Number(inp.value), ok = inp.value !== '' && t >= 0 && t <= 100;
     $('#d-banner', v).className = 'banner ' + (ok ? 'ok' : 'err');
-    $('#d-banner', v).textContent = ok ? '✓ FORMULARIO VÁLIDO — Listo para autorizar' : '✗ La tarifa debe estar entre 0 y 100';
+    $('#d-banner', v).textContent = ok ? '✓ Listo para autorizar' : '✗ La tarifa debe estar entre 0 y 100';
     if (!ok) return;
     var rend = Number(v.dataset.rend), r20 = Math.round(rend * t / 100);
     pintarCalculo(v, { rete4: Number(v.dataset.rete4), rete20: r20, diferencia: r20 - Number(v.dataset.rete4), saldoNeto: Number(v.dataset.cdt) - r20 }, t);
   });
+  $('.modal', v).focus({ preventScroll: true });
 }
 
 function resolver(btn) {
   var v = $('#modal-det'), a = btn.dataset.a, id = btn.dataset.id;
-  var datos = { tarifa: $('#d-tarifa', v).value, formaPago: $('#d-forma', v).value, vencimiento: $('#d-venc', v).value, notas: $('#d-notas', v).value };
+  var datos = { tarifa: $('#d-tarifa', v).value, formaPago: $('#d-forma', v).value, notas: $('#d-notas', v).value };
   var t = Number(datos.tarifa);
   if (datos.tarifa === '' || !(t >= 0 && t <= 100)) return toast('La tarifa debe estar entre 0 y 100.', 'err');
   if (a === 'rechazar' && !datos.notas.trim()) return toast('Escribe el motivo del rechazo en las notas.', 'err');
-  var txt = { aprobar: ['Aprobar caso ' + id, 'Se enviará un correo a la oficina con las instrucciones de pago.', 'Aprobar', 'verde'], rechazar: ['Rechazar caso ' + id, 'La oficina será notificada con tus notas.', 'Rechazar', 'rojo'], guardar: ['Guardar ajustes', 'Se registrarán los cambios en auditoría.', 'Guardar', ''] }[a];
+  var txt = { aprobar: ['Aprobar caso ' + id, 'Se enviará un correo a las oficinas con las instrucciones de pago.', 'Aprobar', 'verde'], rechazar: ['Rechazar caso ' + id, 'Las oficinas serán notificadas con tus notas.', 'Rechazar', 'rojo'], guardar: ['Guardar ajustes', 'Se registrarán los cambios en el historial.', 'Guardar', ''] }[a];
   var run = function () { return conCarga(btn, function () { return api('resolverCaso', id, a, datos); }).then(function () {
-    v.remove(); toast(a === 'aprobar' ? 'Caso aprobado y correo enviado' : a === 'rechazar' ? 'Caso rechazado' : 'Ajustes guardados', 'ok');
+    cerrarModal(v); toast(a === 'aprobar' ? 'Caso aprobado y correo enviado' : a === 'rechazar' ? 'Caso rechazado' : 'Ajustes guardados', 'ok');
     return Promise.all([api('listarCasos', {}), api('obtenerResumen')]).then(function (r) { S.casos = r[0]; S.resumen = r[1]; if (S.vista === 'panel') pintarPanel(); });
   }).catch(function (e) { toast(e.message, 'err'); }); };
   confirmar(txt[0], '<p>' + txt[1] + '</p>', txt[2], txt[3]).then(function (ok) { if (ok) run(); });
+}
+
+/** Guarda número, estado y fecha del CDT sin cerrar el detalle, y refresca la lista de fondo. */
+function guardarCdt(btn) {
+  var v = $('#modal-det'), id = btn.dataset.id, fe = $('#e-venc', v);
+  var datos = { numeroCdt: $('#e-num', v).value.trim(), estadoCdt: $('#e-can', v).checked ? 'Cancelado' : 'Activo' };
+  if (!fe.disabled) datos.vencimiento = fe.value;
+  conCarga(btn, function () { return api('actualizarCdt', id, datos); }).then(function () {
+    toast(datos.estadoCdt === 'Cancelado' ? 'CDT cancelado. Se conserva en el historial.' : 'Datos del CDT guardados', 'ok');
+    return Promise.all([api('obtenerDetalleCaso', id), S.vista === 'panel' ? api('listarCasos', {}) : S.vista === 'mis' ? api('listarMisCasos') : Promise.resolve(null)]);
+  }).then(function (r) {
+    pintarDetalle(v, r[0]);
+    if (r[1]) { S.casos = r[1]; if (S.vista === 'panel') pintarPanel(); else $('.card', $('#vista')).innerHTML = tablaCasos(r[1]); }
+  }).catch(function (er) { toast(er.message, 'err'); });
 }
 
 /* ------------------------------ Reportes / CSV ------------------------------ */
@@ -416,8 +532,8 @@ function descargarCsv(nombre, filas) {
 }
 
 function csvCasos() {
-  var cab = ['ID Caso', 'Fecha Ingesta', 'Cliente', 'ID Cliente', 'País', 'Oficina', 'Valor CDT', 'Rendimientos', 'Rete4%', 'Rete20%', 'Diferencia', 'Saldo Neto', 'Tarifa%', 'Vencimiento', 'Forma Pago', 'Status', 'Aprobado Por', 'Fecha Aprobación'];
-  var filas = filtrados().map(function (c) { return [c.id, c.fechaIngesta, c.cliente, c.idCliente, c.pais, c.oficina, c.valorCdt, c.rendimientos, c.rete4, c.rete20, c.diferencia, c.saldoNeto, c.tarifa, c.vencimiento, c.formaPago, c.status, c.aprobadoPor, c.fechaAprobacion]; });
+  var cab = ['N.º CDT', 'Estado CDT', 'ID Caso', 'Fecha Ingesta', 'Cliente', 'ID Cliente', 'País', 'Oficina', 'Valor CDT', 'Rendimientos', 'Rete4%', 'Rete20%', 'Diferencia', 'Saldo Neto', 'Tarifa%', 'Vencimiento', 'Forma Pago', 'Trámite', 'Aprobado Por', 'Fecha Aprobación'];
+  var filas = filtrados().map(function (c) { return [c.numeroCdt, c.estadoCdt, c.id, c.fechaIngesta, c.cliente, c.idCliente, c.pais, c.oficina, c.valorCdt, c.rendimientos, c.rete4, c.rete20, c.diferencia, c.saldoNeto, c.tarifa, c.vencimiento, c.formaPago, c.status, c.aprobadoPor, c.fechaAprobacion]; });
   descargarCsv('AutoTrib_casos_' + S.hoy + '.csv', [cab].concat(filas));
 }
 
@@ -441,23 +557,23 @@ function vReportes() {
 /* ------------------------------ Alertas ------------------------------ */
 function vAlertas() {
   return api('listarAlertas').then(function (l) {
-    $('#vista').innerHTML = '<h1>Alertas de vencimiento</h1><p style="color:#666;margin:4px 0 16px">El sistema avisa a la oficina ' + 5 + ' días antes (revisión diaria 8:00 AM).</p><div class="card">' +
-      (l.length ? '<div class="tabla-w"><table class="t"><thead><tr><th>Caso</th><th>Cliente</th><th class="ocmov">Oficina</th><th>Vence</th><th class="m">Días</th><th>Estado</th></tr></thead><tbody>' +
-        l.sort(function (a, b) { return a.dias - b.dias; }).map(function (a) { return '<tr class="clic" data-act="detalle" data-id="' + esc(a.id) + '"><td><b>#' + esc(a.id) + '</b></td><td>' + esc(a.cliente) + '</td><td class="ocmov">' + esc(a.oficina) + '</td><td>' + fecha(a.vencimiento) + '</td><td class="m">' + a.dias + '</td><td>' + chip(a.status) + '</td></tr>'; }).join('') + '</tbody></table></div>'
-        : '<div class="vacio">No hay vencimientos próximos</div>') + '</div>';
+    $('#vista').innerHTML = '<div class="page-h"><div><h1>Alertas de vencimiento</h1><p>El sistema avisa a las oficinas ' + APP_DIAS_ALERTA + ' días antes del vencimiento (revisión diaria a las 8:00 AM). Los CDT cancelados no generan alertas.</p></div></div><div class="card">' +
+      (l.length ? '<div class="tabla-w"><table class="t"><caption class="sr-only">Vencimientos próximos</caption><thead><tr><th scope="col">N.º CDT</th><th scope="col">Cliente</th><th scope="col" class="ocmov">Oficina</th><th scope="col">Vence</th><th scope="col" class="m">Días</th><th scope="col">Alerta</th></tr></thead><tbody>' +
+        l.sort(function (a, b) { return a.dias - b.dias; }).map(function (a) { return '<tr class="clic" data-act="detalle" data-id="' + esc(a.id) + '"><td><div class="cdt-celda"><button type="button" class="link-btn" data-act="detalle" data-id="' + esc(a.id) + '">' + numCdt(a) + '</button><span class="s">Caso ' + esc(a.id) + '</span></div></td><td>' + esc(a.cliente) + '</td><td class="ocmov">' + esc(a.oficina) + '</td><td>' + fecha(a.vencimiento) + '</td><td class="m">' + a.dias + '</td><td>' + chip(a.status) + '</td></tr>'; }).join('') + '</tbody></table></div>'
+        : '<div class="vacio"><strong>No hay vencimientos próximos</strong>Cuando falten ' + APP_DIAS_ALERTA + ' días o menos para un CDT activo, aparecerá aquí.</div>') + '</div>';
   });
 }
 
 function vAlerta(id) {
   return api('obtenerAlertaCaso', id).then(function (r) {
-    var c = r.caso, cerrado = c.status === 'Rechazado' || c.status === 'Pagado';
-    $('#vista').innerHTML = '<h1>Vencimiento CDT #' + esc(c.id) + '</h1><p style="color:#666;margin:4px 0 16px">' + (r.dias == null ? 'Sin fecha de vencimiento' : r.dias < 0 ? 'Venció hace ' + (-r.dias) + ' días' : 'Vence en ' + r.dias + ' día(s)') + '</p>' +
-      '<div class="card"><h3>Estado actual</h3>' + dato('Cliente', esc(c.cliente)) + dato('Monto', money(c.valorCdt)) + dato('Vencimiento', fecha(c.vencimiento)) + dato('Forma de pago', esc(c.formaPago)) + dato('Estado', chip(c.status)) + '</div>' +
-      (cerrado ? '<div class="banner no">Este caso ya no admite cambios.</div>' :
-        '<div class="card"><h3>' + (S.confirmarAlerta ? '✓ ¿Todo correcto? Confirma abajo' : 'Editar datos') + '</h3><div class="grid2"><div class="campo"><label>Fecha vencimiento</label><input type="date" id="a-venc" min="' + r.hoy + '" value="' + esc(c.vencimiento) + '"></div>' +
-        '<div class="campo"><label>Forma de pago</label><select id="a-forma">' + S.formas.map(function (f) { return '<option ' + (f === c.formaPago ? 'selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select></div></div>' +
-        '<div class="campo"><label>Notas</label><textarea id="a-notas" rows="3" maxlength="500">' + esc(c.notasOficina) + '</textarea></div>' +
-        '<div class="barra"><button class="btn rojo" data-act="alerta-guardar" data-id="' + esc(c.id) + '">Guardar cambios</button><button class="btn verde" data-act="alerta-ok" data-id="' + esc(c.id) + '">✓ Confirmar vencimiento</button></div></div>');
+    var c = r.caso, cerrado = c.status === 'Rechazado' || c.status === 'Pagado', canc = c.estadoCdt === 'Cancelado';
+    $('#vista').innerHTML = '<div class="page-h"><div><h1>Vencimiento del CDT <span class="num">' + esc(c.numeroCdt || 'sin número') + '</span></h1><p>' + (canc ? 'CDT cancelado: no tiene próximo vencimiento.' : r.dias == null ? 'Sin fecha de vencimiento registrada.' : r.dias < 0 ? 'Venció hace ' + (-r.dias) + ' días.' : 'Vence en ' + r.dias + ' día(s).') + '</p></div></div>' +
+      '<div class="card"><h3>Estado actual</h3>' + dato('N.º CDT', numCdt(c)) + dato('Caso', esc(c.id)) + dato('Cliente', esc(c.cliente)) + dato('Monto', money(c.valorCdt)) + dato('Estado del CDT', chip(c.estadoCdt)) + dato('Vencimiento', canc ? '—' : fecha(c.vencimiento)) + dato('Forma de pago', esc(c.formaPago)) + dato('Trámite', chip(c.status)) + '</div>' +
+      (cerrado || canc ? '<div class="banner no">' + (canc ? 'El CDT está cancelado. Si se reactivó, cámbialo desde Mis casos.' : 'Este caso ya no admite cambios.') + '</div>' :
+        '<div class="card"><h3>' + (S.confirmarAlerta ? 'Si todo está correcto, confirma abajo' : 'Editar datos') + '</h3><div class="grid2"><div class="campo"><label for="a-venc">Fecha de vencimiento</label><input type="date" id="a-venc" min="' + r.hoy + '" value="' + esc(c.vencimiento) + '"></div>' +
+        '<div class="campo"><label for="a-forma">Forma de pago</label><select id="a-forma">' + S.formas.map(function (f) { return '<option ' + (f === c.formaPago ? 'selected' : '') + '>' + esc(f) + '</option>'; }).join('') + '</select></div></div>' +
+        '<div class="campo"><label for="a-notas">Notas</label><textarea id="a-notas" rows="3" maxlength="500">' + esc(c.notasOficina) + '</textarea></div>' +
+        '<div class="barra"><button class="btn" data-act="alerta-guardar" data-id="' + esc(c.id) + '">Guardar cambios</button><button class="btn verde" data-act="alerta-ok" data-id="' + esc(c.id) + '">Confirmar vencimiento</button></div></div>');
   });
 }
 
@@ -479,12 +595,12 @@ function pasosPago(c, k) {
 function vPago(id) {
   return api('obtenerInstrucciones', id).then(function (r) {
     var c = r.caso, k = r.contacto, pagado = c.status === 'Pagado', pasos = pasosPago(c, k);
-    $('#vista').innerHTML = '<h1>Instrucciones de pago — ' + esc(c.formaPago) + '</h1>' +
-      '<div class="card">' + dato('Caso', '#' + esc(c.id)) + dato('Cliente', esc(c.cliente)) + dato('Monto a cobrar', '<span style="color:var(--rojo)">' + money(c.diferencia) + '</span>') + dato('Vencimiento', fecha(c.vencimiento)) + '</div>' +
-      (pagado ? '<div class="banner ok">✓ Pago completado el ' + fecha(c.fechaPago) + '</div>' : '') +
+    $('#vista').innerHTML = '<div class="page-h"><div><h1>Instrucciones de pago</h1><p>' + esc(c.formaPago) + '</p></div></div>' +
+      '<div class="card">' + dato('N.º CDT', numCdt(c)) + dato('Caso', esc(c.id)) + dato('Cliente', esc(c.cliente)) + dato('Retención no descontada (monto a registrar)', '<span class="num" style="color:var(--pri-osc);font-size:18px">' + money(c.diferencia) + '</span>') + dato('Vencimiento', c.estadoCdt === 'Cancelado' ? 'CDT cancelado' : fecha(c.vencimiento)) + '</div>' +
+      (pagado ? '<div class="banner ok" style="margin:0 0 16px">✓ Pago completado el ' + fecha(c.fechaPago) + '</div>' : '') +
       pasos.map(function (p) { return '<div class="paso"><h3>' + esc(p[0]) + '</h3>' + p[1].map(function (t) { return '<label class="ck"><input type="checkbox" class="ck-pago" ' + (pagado ? 'checked disabled' : '') + '> ' + esc(t) + '</label>'; }).join('') + '</div>'; }).join('') +
       '<div class="card"><h3>¿Necesitas ayuda?</h3><p>Contacta a: <b>' + esc(k.nombre) + '</b><br>Ext: ' + esc(k.ext) + ' | <a href="mailto:' + esc(k.email) + '">' + esc(k.email) + '</a></p></div>' +
-      (pagado ? '' : '<div class="barra"><button class="btn verde" id="btn-pago" data-act="pago-ok" data-id="' + esc(c.id) + '" disabled>Marcar como completado</button></div><p class="no-print" style="font-size:12px;color:#999">Marca todos los pasos para habilitar el botón.</p>');
+      (pagado ? '' : '<div class="barra"><button class="btn verde" id="btn-pago" data-act="pago-ok" data-id="' + esc(c.id) + '" disabled>Marcar como completado</button></div><p class="no-print hint">Marca todos los pasos para habilitar el botón.</p>');
     $$('.ck-pago').forEach(function (cb) { cb.addEventListener('change', function () { var b = $('#btn-pago'); if (b) b.disabled = $$('.ck-pago').some(function (x) { return !x.checked; }); $$('.paso').forEach(function (p) { p.classList.toggle('hecho', $$('.ck-pago', p).every(function (x) { return x.checked; })); }); }); });
   });
 }
@@ -492,12 +608,12 @@ function vPago(id) {
 /* ------------------------------ Ayuda ------------------------------ */
 function vAyuda() {
   var r = S.user.rol;
-  var ingreso = '<h3>Cómo ingresar un CDT</h3><ol><li>Entra a <b>Ingresar CDT</b> y completa nombre, ID, valor y rendimientos. El país es opcional: escribe sin tildes ni mayúsculas y elige de la lista.</li><li>El cálculo de retenciones aparece automáticamente en el cuadro rojo.</li><li>Cuando todos los campos estén en verde, pulsa <b>Enviar a autorización</b>.</li><li>Si no conoces la fecha de vencimiento, agrégala después desde <b>Mis casos</b>.</li></ol><p>Rojo: falta o inválido · Amarillo: incompleto · Verde: correcto.</p>';
-  var gestion = '<h3>Revisión y autorización</h3><ol><li>En <b>Panel de gestión</b> filtra por estado, oficina o fechas.</li><li>Toca un caso para ver el detalle y ajustar la <b>tarifa %</b>, la forma de pago y las notas.</li><li><b>Aprobar</b> envía las instrucciones a las oficinas destinatarias; <b>Rechazar</b> exige notas.</li><li>Usa <b>Aprobar lote</b> para varios casos con sus condiciones actuales.</li></ol>';
+  var ingreso = '<h3>Cómo ingresar un CDT</h3><ol><li>Entra a <b>Ingresar CDT</b> y completa el número del CDT, su estado (Activo o Cancelado), el cliente, el valor y los rendimientos. Un CDT cancelado no pide fecha de vencimiento y se conserva en el historial. El país es opcional: escribe sin tildes ni mayúsculas y elige de la lista.</li><li>El cálculo de retenciones aparece automáticamente en el cuadro rojo.</li><li>Cuando todos los campos estén en verde, pulsa <b>Enviar a autorización</b>.</li><li>Si no conoces la fecha de vencimiento, agrégala después: abre el caso en <b>Mis casos</b> y usa <b>Datos del CDT</b>. Ahí también puedes corregir el número o cambiar el estado entre Activo y Cancelado.</li></ol><p>Rojo: falta o inválido · Amarillo: incompleto · Verde: correcto.</p>';
+  var gestion = '<h3>Revisión y autorización</h3><ol><li>En <b>Panel de gestión</b> filtra por trámite, estado del CDT, oficina o fechas, o busca por número de CDT.</li><li>Toca un caso para ver el detalle y ajustar la <b>tarifa %</b>, la forma de pago y las notas.</li><li><b>Aprobar</b> envía las instrucciones a las oficinas destinatarias; <b>Rechazar</b> exige notas.</li><li>Usa <b>Aprobar lote</b> para varios casos con sus condiciones actuales.</li></ol>';
   var roles = '<h3>Roles</h3><ul><li><b>Oficina</b> (por defecto): ingresa CDT y ve solo sus casos.</li><li><b>Operativo</b>: gestiona (aprueba, tarifa, alertas, reportes).</li><li><b>Impuestos</b>: ingresa CDT en nombre de oficinas y gestiona.</li></ul><p>Para cambiar el rol de alguien edita la columna <b>rol</b> en la hoja ACCESOS (el detalle está en la hoja ROLES).</p>';
   var impuestos = '<h3>Ingresar en nombre de una oficina</h3><p>Con el perfil Impuestos, el formulario tiene el apartado <b>Destinatarios de las notificaciones</b>: escribe los correos de las oficinas (separados por coma) y todos los avisos de ese caso les llegarán a ellas, no a ti.</p>';
   $('#vista').innerHTML = '<h1>Ayuda</h1><div class="card ayuda">' + (r === 'Oficina' ? ingreso : r === 'Impuestos' ? impuestos + ingreso + gestion + roles : gestion + roles) +
-    '<p style="color:#999">Si algo no funciona, contacta al administrador.</p></div>';
+    '<p class="hint" style="margin-top:16px">Si algo no funciona, contacta al administrador.</p></div>';
 }
 
 /* ------------------------------ Eventos ------------------------------ */
@@ -506,9 +622,10 @@ document.addEventListener('click', function (e) {
   var a = el.dataset.act;
   if (a === 'ir') ir(el.dataset.v);
   else if (a === 'detalle') abrirDetalle(el.dataset.id);
-  else if (a === 'cerrar') { var m = $('#modal-det'); if (m) m.remove(); }
+  else if (a === 'cerrar') cerrarModal(el.closest('.velo'));
   else if (a === 'resolver') resolver(el);
-  else if (a === 'ir-pago') { var m2 = $('#modal-det'); if (m2) m2.remove(); ir('pago', el.dataset.id); }
+  else if (a === 'ir-pago') { cerrarModal($('#modal-det')); ir('pago', el.dataset.id); }
+  else if (a === 'guardar-cdt') guardarCdt(el);
   else if (a === 'refrescar') ir(S.vista);
   else if (a === 'csv') csvCasos();
   else if (a === 'imprimir') window.print();
@@ -521,14 +638,6 @@ document.addEventListener('click', function (e) {
         toast(r.aprobados + ' aprobados' + (r.fallos.length ? ', ' + r.fallos.length + ' con error' : ''), r.fallos.length ? 'err' : 'ok'); ir('panel');
       }).catch(function (er) { toast(er.message, 'err'); });
     });
-  }
-  else if (a === 'guardar-venc') {
-    var fv = $('#v-venc').value;
-    if (!fv) return toast('Elige la fecha de vencimiento.', 'err');
-    conCarga(el, function () { return api('actualizarVencimiento', el.dataset.id, fv); }).then(function () {
-      toast('Fecha de vencimiento guardada', 'ok'); var m3 = $('#modal-det'); if (m3) m3.remove();
-      if (S.vista === 'panel' || S.vista === 'mis') ir(S.vista);
-    }).catch(function (er) { toast(er.message, 'err'); });
   }
   else if (a === 'pago-ok') {
     confirmar('Confirmar pago', '<p>¿Confirmas que el pago fue realizado? El equipo de Impuestos será notificado.</p>', 'Confirmar', 'verde').then(function (ok) {
@@ -544,9 +653,13 @@ document.addEventListener('click', function (e) {
   }
 });
 
-document.addEventListener('change', function (e) {
+function aplicarFiltro(e) {
   var f = e.target.dataset && e.target.dataset.filtro;
-  if (f) { S.filtros[f] = e.target.value; $('#tabla-panel').innerHTML = tablaCasos(filtrados(), { seleccion: true }); }
+  if (f && $('#tabla-panel')) { S.filtros[f] = e.target.value; $('#tabla-panel').innerHTML = tablaCasos(filtrados(), { seleccion: true }); }
+}
+document.addEventListener('input', function (e) { if (e.target.dataset && e.target.dataset.filtro === 'q') aplicarFiltro(e); });
+document.addEventListener('change', function (e) {
+  aplicarFiltro(e);
   if (e.target.id === 'sel-todos') $$('.sel').forEach(function (c) { c.checked = e.target.checked; });
 });
 document.addEventListener('click', function (e) { if (e.target.closest('.sel') || e.target.id === 'sel-todos') e.stopPropagation(); }, true);
