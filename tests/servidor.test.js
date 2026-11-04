@@ -57,7 +57,7 @@ t('Leydi aprueba con tarifa 15% → recalcula, audita, envía instrucciones', ()
   const antes = E.correos.length;
   const n = c.resolverCaso(id, 'aprobar', { tarifa: 15, formaPago: 'Efectivo', vencimiento: '', notas: 'Bien' });
   assert.strictEqual(n.status, 'Aprobado'); assert.strictEqual(n.rete20, 750000); assert.strictEqual(n.diferencia, 550000);
-  assert.strictEqual(n.saldoNeto, 4250000); assert.strictEqual(n.aprobadoPor, 'Leydi Y Librado Bernal');
+  assert.strictEqual(n.saldoNeto, 4250000); assert.strictEqual(n.aprobadoPor, 'Leydi Librado Bernal');
   const nuevos = E.correos.slice(antes);
   assert.ok(nuevos.some(m => m.to === 'pepito@dav.com.co' && /Aprobado - Instrucciones de Pago/.test(m.subject) && /page=pago&amp;case=CDT001/.test(m.htmlBody)));
   const aud = c.obtenerAuditoria(id).map(a => a.accion);
@@ -97,13 +97,13 @@ t('país libre: "mexico" → México; texto no listado se acepta; vacío es vál
   assert.strictEqual(c.normalizarPais_('ESPANA'), 'España'); assert.strictEqual(c.normalizarPais_('  estados UNIDOS '), 'Estados Unidos');
 });
 t('solo hay Débito de cuenta y Efectivo', () => assert.deepStrictEqual(JSON.parse(JSON.stringify(c.FORMAS_PAGO)), ['Débito de cuenta', 'Efectivo']));
-E.hojas.ACCESOS.appendRow(['librado@dav.com.co', 'Leydi Y Librado Bernal', 'Impuestos', 'Sí', 'Impuestos']);
+E.hojas.ACCESOS.appendRow(['librado@dav.com.co', 'Leydi Librado Bernal', 'Impuestos', 'Sí', 'Impuestos']);
 E.hojas.ACCESOS.appendRow(['bogota@dav.com.co', 'Oficina Bogotá', 'Oficina', 'Sí', 'Bogotá Centro']);
 E.hojas.ACCESOS.appendRow(['cali@dav.com.co', 'Oficina Cali', 'Oficina', 'Sí', 'Cali']);
 E.hojas.ACCESOS.appendRow(['conta@dav.com.co', 'Conta', 'Contabilidad', 'Sí', '']);
 let idImp;
 t('Impuestos ve ambas visuales y exige destinatarios válidos', () => {
-  como('librado@dav.com.co'); const s = c.iniciarSesion(); assert.strictEqual(s.usuario.rol, 'Impuestos'); assert.strictEqual(s.usuario.nombre, 'Leydi Y Librado Bernal');
+  como('librado@dav.com.co'); const s = c.iniciarSesion(); assert.strictEqual(s.usuario.rol, 'Impuestos'); assert.strictEqual(s.usuario.nombre, 'Leydi Librado Bernal');
   sinErrores(() => c.guardarCaso(base), /al menos un correo/);
   sinErrores(() => c.guardarCaso(Object.assign({}, base, { correosDestino: 'bogota@dav.com.co, malo' })), /no válidos/);
   assert.ok(Array.isArray(c.listarCasos({}))); assert.ok(Array.isArray(c.listarMisCasos()));

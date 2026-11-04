@@ -6,7 +6,7 @@ Abre el enlace que te compartió el administrador. El sistema identifica tu corr
 
 - **Oficina** (por defecto): ingresa CDT y ve solo sus casos.
 - **Operativo**: solo gestión (aprueba, ajusta tarifa, alertas y reportes).
-- **Impuestos** (Leydi Y Librado Bernal y su equipo): ingresa CDT en nombre de oficinas y gestiona.
+- **Impuestos** (Leydi Librado Bernal y su equipo): ingresa CDT en nombre de oficinas y gestiona.
 
 El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada uno.
 

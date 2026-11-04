@@ -17,7 +17,7 @@ const casos = [
   { id: 'CDT001', numeroCdt: '0012345678', estadoCdt: 'Activo', correosDestino: 'pepito@dav.com.co', fechaIngesta: '2026-10-15', cliente: 'Juan Pérez', idCliente: '123456', pais: 'Colombia', valorCdt: 5000000, rendimientos: 5000000, rete4: 200000, rete20: 1000000, diferencia: 800000, saldoNeto: 4000000, vencimiento: '2026-10-25', formaPago: 'Débito de cuenta', status: 'Pendiente', tarifa: 20, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' },
   { id: 'CDT002', numeroCdt: '', estadoCdt: 'Cancelado', correosDestino: 'pepito@dav.com.co', fechaIngesta: '2026-10-16', cliente: 'María López', idCliente: '234567', pais: 'Estados Unidos', valorCdt: 10000000, rendimientos: 10000000, rete4: 400000, rete20: 2000000, diferencia: 1600000, saldoNeto: 8000000, vencimiento: '', formaPago: 'Efectivo', status: 'Aprobado', tarifa: 20, notasLeydi: 'Bien', aprobadoPor: 'Leydi Bernal', fechaAprobacion: '2026-10-16', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' }
 ];
-const usuario = rol === 'Oficina' ? { email: 'pepito@dav.com.co', nombre: 'Pepito García', rol, oficina: 'Bogotá Centro' } : { email: 'leydi@dav.com.co', nombre: 'Leydi Y Librado Bernal', rol, oficina: 'Impuestos' };
+const usuario = rol === 'Oficina' ? { email: 'pepito@dav.com.co', nombre: 'Pepito García', rol, oficina: 'Bogotá Centro' } : { email: 'leydi@dav.com.co', nombre: 'Leydi Librado Bernal', rol, oficina: 'Impuestos' };
 
 const mock = `
 window.__llamadas=[];

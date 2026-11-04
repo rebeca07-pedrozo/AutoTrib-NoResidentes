@@ -10,16 +10,16 @@ Hay **3 roles**. También están en la hoja **ROLES** del Sheet y en la lista de
 |---|---|---|
 | **Oficina** | **Por defecto**: cualquier correo que entre y no esté en ACCESOS con otro rol | Ingresar CDT (los avisos le llegan a ella misma), ver solo los casos donde su correo es destinatario, ver instrucciones de pago, confirmar pago, editar la fecha de vencimiento |
 | **Operativo** | Se asigna a mano en ACCESOS | Solo gestión: ver todos los casos, aprobar/rechazar (individual y por lote), cambiar tarifa %, alertas, reportes. No ingresa CDT |
-| **Impuestos** | Leydi Y Librado Bernal y el equipo de Impuestos (a mano en ACCESOS) | **Las dos visuales**: ingresa CDT en nombre de una o varias oficinas y los gestiona como Operativo |
+| **Impuestos** | Leydi Librado Bernal y el equipo de Impuestos (a mano en ACCESOS) | **Las dos visuales**: ingresa CDT en nombre de una o varias oficinas y los gestiona como Operativo |
 
 > El perfil **Contabilidad ya no existe**. Si en tu hoja ACCESOS quedó alguien con rol `Contabilidad`, entra con el rol por defecto (Oficina) hasta que le cambies el rol. Ya no se envían correos a Contabilidad.
 
 **Rol por defecto.** Quien abre la app por primera vez y no está en ACCESOS entra como **Oficina**: se agrega solo a ACCESOS (activo = Sí, nombre sacado del correo, oficina vacía) para que luego completes su nombre y oficina. Para dar otro rol, cambia la columna `rol` de esa fila.
 - Bloquear a alguien: pon `activo = No` en su fila.
 - Quitar el rol por defecto (solo entra quien esté en ACCESOS): deja vacía la celda de CONFIG → *Rol por defecto*.
-- El usuario que ejecuta `inicializarSistema()` queda como **Impuestos** (cambia su nombre en ACCESOS); la fila de ejemplo de Leydi queda como `Leydi Y Librado Bernal` con rol Impuestos (reemplaza su correo por el real).
+- El usuario que ejecuta `inicializarSistema()` queda como **Impuestos** (cambia su nombre en ACCESOS); la fila de ejemplo de Leydi queda como `Leydi Librado Bernal` con rol Impuestos (reemplaza su correo por el real).
 - Como cualquier persona de la organización entra como Oficina, si necesitas lista cerrada usa la opción anterior o `APP.VALIDAR_DOMINIO` en Config.gs.
-- Los nombres ya escritos en tu hoja ACCESOS **no se cambian solos**: corrige a mano el nombre de tu compañera a `Leydi Y Librado Bernal`.
+- Los nombres ya escritos en tu hoja ACCESOS **no se cambian solos**: corrige a mano el nombre de tu compañera a `Leydi Librado Bernal`.
 
 ## Ingreso en nombre de una oficina (perfil Impuestos)
 

@@ -73,7 +73,7 @@ var ROLES_DEFINICION = [
    'Ingresar CDT (los correos le llegan a ella misma), ver solo los casos donde su correo es destinatario, ver instrucciones de pago, confirmar pago, editar la fecha de vencimiento.'],
   ['Operativo', 'Gestión sin ingreso. Se asigna a mano en ACCESOS.',
    'Panel de gestión: ver todos los casos, aprobar/rechazar (individual y lote), cambiar tarifa %, alertas, reportes. No ingresa CDT.'],
-  ['Impuestos', 'Leydi Y Librado Bernal y el equipo de Impuestos. Se asigna a mano en ACCESOS.',
+  ['Impuestos', 'Leydi Librado Bernal y el equipo de Impuestos. Se asigna a mano en ACCESOS.',
    'Las dos visuales: ingresar CDT en nombre de una o varias oficinas (indicando los correos destinatarios, para que las notificaciones lleguen a ellas y no a quien digita) y gestionarlos como Operativo.']
 ];
 

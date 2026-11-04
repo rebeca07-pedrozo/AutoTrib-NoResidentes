@@ -63,7 +63,7 @@ function crearPestañas() {
     var yo = Session.getEffectiveUser().getEmail();
     acc.getRange(2, 1, 3, 5).setValues([
       [yo, 'Administrador (cambiar)', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
-      ['leydi@dav.com.co', 'Leydi Y Librado Bernal', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
+      ['leydi@dav.com.co', 'Leydi Librado Bernal', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
       ['pepito@dav.com.co', 'Pepito García', ROLES.OFICINA, 'Sí', 'Bogotá Centro']
     ]);
   }
