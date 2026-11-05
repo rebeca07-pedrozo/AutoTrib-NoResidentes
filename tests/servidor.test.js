@@ -229,6 +229,11 @@ t('es obligatorio indicar qué desea el cliente y solo valen las dos opciones', 
   sinErrores(() => c.guardarCaso(Object.assign({}, base, { tipoRetiro: 'Otro' })), /qué desea el cliente/);
 });
 let idRet;
+t('el correo de caso recibido avisa que hay que esperar la revisión y aprobación del área encargada', () => {
+  como('pepito@dav.com.co'); const antes = E.correos.length; c.guardarCaso(Object.assign({}, base, { numeroCdt: 'ESPERA-01' }));
+  const m = E.correos.slice(antes).find(x => /recibido/.test(x.subject));
+  assert.ok(/esperar a que el área encargada revise y apruebe el caso/.test(m.htmlBody) && /notificando por correo/.test(m.htmlBody));
+});
 t('se guarda con el valor neto correcto en cada opción y se recupera', () => {
   const a = c.guardarCaso(Object.assign({}, base, { numeroCdt: 'RET-001', valorCdt: 10000000, rendimientos: 5000000, tipoRetiro: 'Cancelar producto' })).id; idRet = a;
   const b = c.guardarCaso(Object.assign({}, base, { numeroCdt: 'RET-002', valorCdt: 10000000, rendimientos: 5000000, tipoRetiro: 'Solo rendimientos' })).id;

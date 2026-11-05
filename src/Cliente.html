@@ -68,6 +68,13 @@ function calcular(rend, cdt, tarifa, tarifaSis, tipo) {
   return { rete4: r4, rete20: r20, diferencia: r20 - r4, saldoNeto: neto };
 }
 
+/** Aviso que acompaña a la radicación: el caso debe ser revisado y aprobado antes de continuar. */
+function avisoEspera(clase, yaEnviado) {
+  var imp = S.user && S.user.rol === 'Impuestos';
+  return '<div class="banner info aviso-espera ' + (clase || '') + '" role="note"><b>' + (yaEnviado ? 'Ahora debes esperar' : 'Después de enviar, debes esperar') + '</b> a que el área encargada revise y apruebe el caso. ' +
+    (imp ? 'Las oficinas destinatarias recibirán las notificaciones por correo.' : 'Te estaremos notificando por correo cuando haya novedades.') + '</div>';
+}
+
 function notaNeto(tipo, enForm) {
   return tipo === 'Cancelar producto' ? 'Valor del CDT + rendimientos − retefuente' : tipo === 'Solo rendimientos' ? 'Rendimientos − retefuente'
     : enForm ? 'Elige qué desea el cliente' : 'Dato anterior: valor del CDT − retefuente';
@@ -215,7 +222,7 @@ function vFormulario() {
       '<div class="grid2"><div class="campo"><label for="ct-mail">Tu correo</label><input id="ct-mail" readonly value="' + esc(u.email) + '"></div><div class="campo"><label for="ct-nom">Tu nombre</label><input id="ct-nom" readonly value="' + esc(u.nombre) + '"></div></div></section>' +
 
     '<section class="card f-sec o7" aria-labelledby="t-val"><h3 id="t-val">Revisión antes de enviar</h3><ul class="chk" id="chk"></ul><div id="banner" class="banner no" role="status" aria-live="polite"></div>' +
-      '<div class="barra"><button type="button" class="btn sec" data-act="ir" data-v="inicio">Cancelar</button><button type="submit" class="btn" id="enviar" disabled>Enviar a autorización</button></div></section>' +
+      '<div class="barra"><button type="button" class="btn sec" data-act="ir" data-v="inicio">Cancelar</button><button type="submit" class="btn" id="enviar" disabled>Enviar a autorización</button></div>' + avisoEspera() + '</section>' +
     '</div></form>' +
     (recientes.length ? '<section class="card" style="margin-top:8px"><div class="card-h"><h3>Últimos casos</h3><button type="button" class="btn sec peq" data-act="ir" data-v="mis">Ver mis casos</button></div><div>' +
       recientes.map(function (c) { return '<span class="chip ' + esc(c.status) + '" style="margin:3px 6px 3px 0" title="' + esc(c.cliente) + '">' + esc(c.numeroCdt || c.id) + ' · ' + esc(c.status) + '</span>'; }).join('') + '</div></section>' : '');
@@ -312,6 +319,7 @@ function enviarCaso(e) {
       $('#vista').innerHTML = '<div class="card" style="text-align:center;padding:36px 24px"><div style="font-size:48px;color:var(--ok);line-height:1" aria-hidden="true">✓</div><h1 style="margin-top:8px">CDT <span class="num">' + esc(F.numeroCdt) + '</span> enviado</h1>' +
         '<p style="margin-top:6px;color:var(--ink-2)">Caso ' + esc(r.id) + ' · ' + esc(F.tipoRetiro) + ' · ' + chip(F.estadoCdt) + '</p>' +
         '<p style="margin:14px auto 0;max-width:56ch">' + (S.user.rol === 'Impuestos' ? 'Las notificaciones de este caso llegarán a: <b>' + esc(F.correosDestino) + '</b>.' : 'El equipo de Impuestos recibió tu solicitud. Te llegará un correo con las instrucciones de pago cuando sea aprobado.') + '</p>' +
+        avisoEspera('centrado', true) +
         (!cancelado && !F.vencimiento ? '<p class="hint" style="margin-top:8px">Si aún no conoces la fecha de vencimiento, agrégala después desde Mis casos.</p>' : '') +
         '<div class="barra" style="justify-content:center"><button class="btn" data-act="ir" data-v="ingresar">Ingresar otro CDT</button><button class="btn sec" data-act="ir" data-v="mis">Ver mis casos</button></div></div>';
       $('#contenido').focus({ preventScroll: true }); window.scrollTo(0, 0);

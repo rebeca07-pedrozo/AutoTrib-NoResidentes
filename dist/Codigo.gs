@@ -1120,6 +1120,8 @@ function enviarConfirmacionIngesta(caso, usuario) {
     ['Qué desea el cliente', caso.tipoRetiro || 'No indicado'], ['Rendimientos', pesos(caso.rendimientos)], ['Retención a cobrar', pesos(caso.diferencia)], ['Valor neto para el cliente', pesos(caso.saldoNeto)]]);
   enviar_(correosDelCaso_(caso), 'Caso ' + caso.id + ' recibido - En autorización', 'Caso ' + caso.id + ' enviado a autorización',
     '<p>Recibimos el caso de <b>' + esc(caso.cliente) + '</b> para la oficina <b>' + esc(caso.oficina || 'indicada') + '</b>. Les avisaremos cuando sea revisado.</p>' + datos +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px"><tr><td style="background:#E7EFF9;color:#0B4A8F;border-radius:8px;padding:14px 16px;font-size:14px;line-height:1.5">' +
+    '<b>Qué sigue:</b> deben esperar a que el área encargada revise y apruebe el caso. Les estaremos notificando por correo cuando haya novedades.</td></tr></table>' +
     '<p style="font-size:13px;color:#666">Mientras no conozcan la fecha de vencimiento, pueden agregarla después desde "Mis casos".</p>' + boton_('Ver mis casos', urlApp()));
   var gestores = correosGestores_().filter(function (m) { return m !== String(usuario.email).toLowerCase(); });
   enviar_(gestores, 'Nuevo caso por autorizar: ' + caso.id, 'Nuevo caso pendiente',

@@ -92,7 +92,9 @@ window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler
       assert.ok(await p.isDisabled('#enviar'), 'rendimientos > CDT bloquea');
       await p.fill('#rendimientos', '5000000');
       await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-form.png`, fullPage: true });
+      assert.ok((await p.textContent('#t-val + .chk ~ .barra ~ .aviso-espera, .o7 .aviso-espera')).includes('esperar'), 'aviso bajo el botón de enviar');
       await p.click('#enviar'); await p.click('.velo [data-r="1"]'); await p.waitForSelector('text=enviado');
+      assert.ok((await p.textContent('.aviso-espera')).includes('esperar') && (await p.textContent('.aviso-espera')).includes('a que el área encargada revise y apruebe el caso'), 'aviso tras radicar');
       const g = (await p.evaluate('window.__llamadas')).find(l => l[0] === 'guardarCaso'); assert.ok(g);
       assert.strictEqual(g[1][0].tipoRetiro, 'Solo rendimientos'); assert.strictEqual(g[1][0].numeroCdt, '0012345678'); assert.strictEqual(g[1][0].estadoCdt, 'Activo'); assert.strictEqual(g[1][0].vencimiento, '2027-03-15');
       assert.strictEqual(g[1][0].pais, 'España'); if (rol === 'Impuestos') assert.strictEqual(g[1][0].correosDestino, 'bogota@dav.com.co, cali@dav.com.co');

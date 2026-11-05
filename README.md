@@ -126,6 +126,10 @@ Valor neto para el cliente (según lo que desea):
 ```
 Ejemplo (CDT $10.000.000, rendimientos $5.000.000, tarifa 20 %): Rete4 200.000 · Rete20 1.000.000 · Diferencia 800.000 · **cancelar el producto → $14.000.000** · **solo rendimientos → $4.000.000**. Con tarifa 15 %: retefuente 750.000 → 14.250.000 / 4.250.000 (la diferencia pasa a 550.000).
 
+### Aviso de espera al radicar
+
+Al enviar un caso se le recuerda a quien lo radica que **debe esperar a que el área encargada revise y apruebe el caso** y que se le notificará por correo. El aviso aparece **debajo del botón "Enviar a autorización"**, en la **pantalla de confirmación** tras radicar y en el **correo de "caso recibido"** (Impuestos ve que las oficinas destinatarias recibirán las notificaciones). El texto está en `avisoEspera()` (`src/Cliente.html`) y `enviarConfirmacionIngesta()` (`src/Email.gs`).
+
 ### Qué desea el cliente
 
 - **Es la primera pregunta del formulario** y es obligatoria: *Cancelar el producto* o *Retirar solo los rendimientos*. El cálculo de la derecha muestra "Valor neto para el cliente" con su fórmula y no da cifra hasta que se elija.
@@ -150,7 +154,7 @@ Estados: `Pendiente → Aprobado → Pagado` o `Pendiente → Rechazado`. Nunca 
 
 ```bash
 npm install            # solo para la prueba de UI (Playwright)
-npm test               # 57 pruebas de lógica del servidor (roles, cálculo, correos, alertas)
+npm test               # 58 pruebas de lógica del servidor (roles, cálculo, correos, alertas)
 npm run test:ui        # formulario, validación en vivo y panel en Chromium (desktop + móvil)
 npm run manual         # regenera docs/Manual_Usuario_AutoTrib.pdf
 ```
