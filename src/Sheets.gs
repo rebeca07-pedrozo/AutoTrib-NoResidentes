@@ -63,7 +63,7 @@ function crearPestañas() {
     var yo = Session.getEffectiveUser().getEmail();
     acc.getRange(2, 1, 3, 5).setValues([
       [yo, 'Administrador (cambiar)', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
-      ['leydi@dav.com.co', 'Leydi Librado Bernal', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
+      ['leydi@dav.com.co', 'Leydi Librado', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
       ['pepito@dav.com.co', 'Pepito García', ROLES.OFICINA, 'Sí', 'Bogotá Centro']
     ]);
   }
@@ -269,6 +269,7 @@ function filaACaso(fila) {
   if (fila[1] instanceof Date) c.fechaIngestaHora = fechaHora(fila[1]);
   if (c.formaPago === 'Débito' || c.formaPago === 'Transferencia') c.formaPago = 'Débito de cuenta';   // datos de versiones anteriores
   c.numeroCdt = String(c.numeroCdt == null ? '' : c.numeroCdt).trim();                              // casos anteriores: sin número
+  if (c.tipoRetiro !== TIPOS_RETIRO.CANCELAR && c.tipoRetiro !== TIPOS_RETIRO.RENDIMIENTOS) c.tipoRetiro = '';       // casos anteriores: no indicado
   if (c.estadoCdt !== ESTADOS_CDT.CANCELADO) c.estadoCdt = ESTADOS_CDT.ACTIVO;                       // casos anteriores: Activo
   if (!c.correosDestino) c.correosDestino = c.emailOficina;                                          // casos anteriores: solo la oficina que los ingresó
   return c;

@@ -14,10 +14,10 @@ const IMG = CON_IMG ? {
 } : { logo: '', carga: '', triangulos: '', bienvenida: '' };
 
 const casos = [
-  { id: 'CDT001', numeroCdt: '0012345678', estadoCdt: 'Activo', correosDestino: 'pepito@dav.com.co', fechaIngesta: '2026-10-15', cliente: 'Juan Pérez', idCliente: '123456', pais: 'Colombia', valorCdt: 5000000, rendimientos: 5000000, rete4: 200000, rete20: 1000000, diferencia: 800000, saldoNeto: 4000000, vencimiento: '2026-10-25', formaPago: 'Débito de cuenta', status: 'Pendiente', tarifa: 20, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' },
-  { id: 'CDT002', numeroCdt: '', estadoCdt: 'Cancelado', correosDestino: 'pepito@dav.com.co', fechaIngesta: '2026-10-16', cliente: 'María López', idCliente: '234567', pais: 'Estados Unidos', valorCdt: 10000000, rendimientos: 10000000, rete4: 400000, rete20: 2000000, diferencia: 1600000, saldoNeto: 8000000, vencimiento: '', formaPago: 'Efectivo', status: 'Aprobado', tarifa: 20, notasLeydi: 'Bien', aprobadoPor: 'Leydi Bernal', fechaAprobacion: '2026-10-16', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' }
+  { id: 'CDT001', tipoRetiro: 'Solo rendimientos', numeroCdt: '0012345678', estadoCdt: 'Activo', correosDestino: 'pepito@dav.com.co', fechaIngesta: '2026-10-15', cliente: 'Juan Pérez', idCliente: '123456', pais: 'Colombia', valorCdt: 5000000, rendimientos: 5000000, rete4: 200000, rete20: 1000000, diferencia: 800000, saldoNeto: 4000000, vencimiento: '2026-10-25', formaPago: 'Débito de cuenta', status: 'Pendiente', tarifa: 20, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' },
+  { id: 'CDT002', tipoRetiro: '', numeroCdt: '', estadoCdt: 'Cancelado', correosDestino: 'pepito@dav.com.co', fechaIngesta: '2026-10-16', cliente: 'María López', idCliente: '234567', pais: 'Estados Unidos', valorCdt: 10000000, rendimientos: 10000000, rete4: 400000, rete20: 2000000, diferencia: 1600000, saldoNeto: 8000000, vencimiento: '', formaPago: 'Efectivo', status: 'Aprobado', tarifa: 20, notasLeydi: 'Bien', aprobadoPor: 'Leydi Librado', fechaAprobacion: '2026-10-16', oficina: 'Bogotá Centro', ingresadoPor: 'Pepito García', emailOficina: 'pepito@dav.com.co', notasOficina: '' }
 ];
-const usuario = rol === 'Oficina' ? { email: 'pepito@dav.com.co', nombre: 'Pepito García', rol, oficina: 'Bogotá Centro' } : { email: 'leydi@dav.com.co', nombre: 'Leydi Librado Bernal', rol, oficina: 'Impuestos' };
+const usuario = rol === 'Oficina' ? { email: 'pepito@dav.com.co', nombre: 'Pepito García', rol, oficina: 'Bogotá Centro' } : { email: 'leydi@dav.com.co', nombre: 'Leydi Librado', rol, oficina: 'Impuestos' };
 
 const mock = `
 window.__llamadas=[];
@@ -28,9 +28,9 @@ const R={
  obtenerResumen:()=>({pendientes:1,hoy:1,aprobados:1,total:2,recientes:[]}),
  guardarCaso:a=>({id:'CDT003',calculo:{}}),
  listarMisCasos:()=>D.casos, listarCasos:()=>D.casos,
- actualizarCdt:(id,d)=>{const c=D.casos.find(x=>x.id===id); if(d.numeroCdt!==undefined)c.numeroCdt=d.numeroCdt; if(d.estadoCdt)c.estadoCdt=d.estadoCdt; if(c.estadoCdt==='Cancelado')c.vencimiento=''; else if(d.vencimiento!==undefined)c.vencimiento=d.vencimiento; return c;},
+ actualizarCdt:(id,d)=>{const c=D.casos.find(x=>x.id===id); if(d.numeroCdt!==undefined)c.numeroCdt=d.numeroCdt; if(d.tipoRetiro)c.tipoRetiro=d.tipoRetiro; if(d.estadoCdt)c.estadoCdt=d.estadoCdt; if(c.estadoCdt==='Cancelado')c.vencimiento=''; else if(d.vencimiento!==undefined)c.vencimiento=d.vencimiento; return c;},
  obtenerDetalleCaso:id=>({gestor:D.usuario.rol!=='Oficina',caso:D.casos.find(c=>c.id===id),auditoria:[{fecha:'15/10/2026 14:30',usuario:'Pepito García',accion:'ingesta',detalle:'Datos ingesta completos'}],config:{tarifaSistema:4}}),
- obtenerInstrucciones:id=>({caso:D.casos[1],contacto:{nombre:'Leydi Bernal',email:'leydi@dav.com.co',ext:'2345',extCaja:'1234'}}),
+ obtenerInstrucciones:id=>({caso:D.casos[1],contacto:{nombre:'Leydi Librado',email:'leydi@dav.com.co',ext:'2345',extCaja:'1234'}}),
  obtenerImagenes:()=>(${JSON.stringify({ triangulos: IMG.triangulos, bienvenida: IMG.bienvenida })}),
  resolverCaso:()=>({}), listarAlertas:()=>[]
 };
@@ -53,6 +53,16 @@ window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler
       assert.ok(await p.isDisabled('#enviar'), 'botón deshabilitado al inicio');
       await p.fill('#cliente', 'Juan Pérez'); await p.fill('#idCliente', '123456');
       await p.fill('#valorCdt', '5000000'); await p.fill('#rendimientos', '5000000'); await p.selectOption('#formaPago', 'Débito de cuenta');
+      // lo primero: qué desea el cliente. Sin elegir no hay valor neto ni se puede enviar
+      assert.strictEqual(await p.textContent('[data-c=saldoNeto]'), '—'); assert.ok(await p.isDisabled('#enviar'));
+      await p.click('label[for=ret-cancelar]');
+      assert.strictEqual(await p.textContent('[data-c=saldoNeto]'), '$ 9,000,000', 'cancelar producto = CDT + rendimientos - retefuente (5M + 5M - 1M)');
+      assert.ok((await p.textContent('[data-c=notaNeto]')).includes('Valor del CDT + rendimientos'));
+      assert.ok(await p.isChecked('#estado-cancelado') && await p.isDisabled('#vencimiento'), 'cancelar el producto deja el CDT cancelado y sin fecha');
+      await p.click('label[for=ret-rend]');
+      assert.strictEqual(await p.textContent('[data-c=saldoNeto]'), '$ 4,000,000', 'solo rendimientos = rendimientos - retefuente (5M - 1M)');
+      assert.ok((await p.textContent('[data-c=notaNeto]')).startsWith('Rendimientos'));
+      assert.ok(await p.isChecked('#estado-activo') && !(await p.isDisabled('#vencimiento')));
       assert.deepStrictEqual(await p.$$eval('#formaPago option', o => o.map(x => x.textContent)), ['Selecciona...', 'Débito de cuenta', 'Efectivo']);
       assert.strictEqual(await p.isVisible('#numeroCdt'), true, 'el número del CDT está en el formulario');
       assert.strictEqual(await p.inputValue('#valorCdt'), '5,000,000');
@@ -84,7 +94,7 @@ window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler
       await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-form.png`, fullPage: true });
       await p.click('#enviar'); await p.click('.velo [data-r="1"]'); await p.waitForSelector('text=enviado');
       const g = (await p.evaluate('window.__llamadas')).find(l => l[0] === 'guardarCaso'); assert.ok(g);
-      assert.strictEqual(g[1][0].numeroCdt, '0012345678'); assert.strictEqual(g[1][0].estadoCdt, 'Activo'); assert.strictEqual(g[1][0].vencimiento, '2027-03-15');
+      assert.strictEqual(g[1][0].tipoRetiro, 'Solo rendimientos'); assert.strictEqual(g[1][0].numeroCdt, '0012345678'); assert.strictEqual(g[1][0].estadoCdt, 'Activo'); assert.strictEqual(g[1][0].vencimiento, '2027-03-15');
       assert.strictEqual(g[1][0].pais, 'España'); if (rol === 'Impuestos') assert.strictEqual(g[1][0].correosDestino, 'bogota@dav.com.co, cali@dav.com.co');
     }
     if (rol !== 'Oficina') {
@@ -102,9 +112,14 @@ window.google={script:{run:new Proxy({},{get:(_,k)=>{ if(k==='withSuccessHandler
       await p.fill('#d-tarifa', '15');
       assert.strictEqual(await p.textContent('.modal [data-c=rete20]'), '$ 750,000');
       assert.strictEqual(await p.textContent('.modal [data-c=diferencia]'), '$ 550,000');
+      assert.strictEqual(await p.textContent('.modal [data-c=saldoNeto]'), '$ 4,250,000', 'solo rendimientos con tarifa 15%: 5M - 750K');
+      assert.ok((await p.textContent('.modal')).includes('Solo rendimientos'));
       await p.waitForTimeout(600); await p.screenshot({ path: `${OUT}/${CON_IMG ? 'img-' : ''}${rol}-${nombre}-detalle.png` });
       await p.fill('#d-tarifa', '150'); assert.ok((await p.textContent('#d-banner')).includes('entre 0 y 100'));
       await p.fill('#d-tarifa', '20');
+      // cambiar lo que desea el cliente recalcula el valor neto
+      await p.selectOption('#e-ret', 'Cancelar producto'); await p.click('[data-act=guardar-cdt]'); await p.waitForFunction(() => document.querySelector('.modal [data-c=saldoNeto]').textContent === '$ 9,000,000');
+      await p.selectOption('#e-ret', 'Solo rendimientos'); await p.click('[data-act=guardar-cdt]'); await p.waitForFunction(() => document.querySelector('.modal [data-c=saldoNeto]').textContent === '$ 4,000,000');
       // Activo → Cancelado → Activo desde el detalle
       await p.fill('#e-venc', '2027-01-20'); await p.click('label[for=e-can]');
       assert.strictEqual(await p.isDisabled('#e-venc'), true); assert.strictEqual(await p.inputValue('#e-venc'), '');

@@ -46,6 +46,13 @@ var INGRESANTES = [ROLES.OFICINA, ROLES.IMPUESTOS];
 /** Estado del certificado (independiente del estado del trámite). Cancelar no borra el registro. */
 var ESTADOS_CDT = { ACTIVO: 'Activo', CANCELADO: 'Cancelado' };
 
+/**
+ * Qué desea el cliente al liquidar el CDT (define el valor neto que se lleva):
+ *  - Cancelar producto: valor del CDT + rendimientos - retefuente
+ *  - Solo rendimientos: rendimientos - retefuente
+ */
+var TIPOS_RETIRO = { CANCELAR: 'Cancelar producto', RENDIMIENTOS: 'Solo rendimientos' };
+
 var ESTADOS = {
   PENDIENTE: 'Pendiente',
   APROBADO: 'Aprobado',
@@ -76,7 +83,7 @@ var ROLES_DEFINICION = [
    'Ingresar CDT (los correos le llegan a ella misma), ver solo los casos donde su correo es destinatario, ver instrucciones de pago, confirmar pago, editar la fecha de vencimiento.'],
   ['Operativo', 'Gestión sin ingreso. Se asigna a mano en ACCESOS.',
    'Panel de gestión: ver todos los casos, aprobar/rechazar (individual y lote), cambiar tarifa %, alertas, reportes. No ingresa CDT.'],
-  ['Impuestos', 'Leydi Librado Bernal y el equipo de Impuestos. Se asigna a mano en ACCESOS.',
+  ['Impuestos', 'Leydi Librado y el equipo de Impuestos. Se asigna a mano en ACCESOS.',
    'Las dos visuales: ingresar CDT en nombre de una o varias oficinas (indicando los correos destinatarios, para que las notificaciones lleguen a ellas y no a quien digita) y gestionarlos como Operativo.']
 ];
 
@@ -86,7 +93,7 @@ var CABECERAS = {
   CDT: ['ID Caso', 'Fecha Ingesta', 'Cliente', 'ID Cliente', 'País', 'Valor CDT', 'Rendimientos',
         'Rete4%', 'Rete20%', 'Diferencia', 'Saldo Neto', 'Vencimiento', 'Forma Pago', 'Status',
         'Tarifa%', 'Notas Leydi', 'Aprobado Por', 'Fecha Aprobación', 'Oficina', 'Ingresado Por',
-        'Email Oficina', 'Notas Oficina', 'Fecha Pago', 'Correos Destino', 'Número CDT', 'Estado CDT'],
+        'Email Oficina', 'Notas Oficina', 'Fecha Pago', 'Correos Destino', 'Número CDT', 'Estado CDT', 'Tipo Retiro'],
   ALERTAS: ['ID Caso', 'Fecha Vencimiento', 'Días para Vencer', 'Status'],
   AUDITORIA: ['Timestamp', 'Usuario', 'Acción', 'ID Caso', 'Detalle']
 };
@@ -94,7 +101,7 @@ var CABECERAS = {
 var CDT_CLAVES = ['id', 'fechaIngesta', 'cliente', 'idCliente', 'pais', 'valorCdt', 'rendimientos',
   'rete4', 'rete20', 'diferencia', 'saldoNeto', 'vencimiento', 'formaPago', 'status',
   'tarifa', 'notasLeydi', 'aprobadoPor', 'fechaAprobacion', 'oficina', 'ingresadoPor',
-  'emailOficina', 'notasOficina', 'fechaPago', 'correosDestino', 'numeroCdt', 'estadoCdt'];
+  'emailOficina', 'notasOficina', 'fechaPago', 'correosDestino', 'numeroCdt', 'estadoCdt', 'tipoRetiro'];
 
 var CDT_FECHAS = ['fechaIngesta', 'vencimiento', 'fechaAprobacion', 'fechaPago'];
 
@@ -190,11 +197,26 @@ function iniciarSesion() {
 
 /* ------------------------------ Cálculos ------------------------------ */
 
-/** Rete4% / Rete20% / Diferencia / Saldo Neto (pesos enteros). */
-function calcularRetenciones(rendimientos, valorCdt, tarifa, tarifaSistema) {
+/**
+ * Rete4% / Rete20% / Diferencia / Valor neto del cliente (pesos enteros).
+ * El valor neto depende de lo que desea el cliente:
+ *   Cancelar producto -> valor del CDT + rendimientos - retefuente (Rete20)
+ *   Solo rendimientos -> rendimientos - retefuente (Rete20)
+ *   (sin indicar, casos anteriores) -> valor del CDT - retefuente, como se calculaba antes
+ */
+function calcularRetenciones(rendimientos, valorCdt, tarifa, tarifaSistema, tipoRetiro) {
   var rete4 = Math.round(rendimientos * tarifaSistema / 100);
   var rete20 = Math.round(rendimientos * tarifa / 100);
-  return { rete4: rete4, rete20: rete20, diferencia: rete20 - rete4, saldoNeto: valorCdt - rete20 };
+  var neto = tipoRetiro === TIPOS_RETIRO.CANCELAR ? valorCdt + rendimientos - rete20
+    : tipoRetiro === TIPOS_RETIRO.RENDIMIENTOS ? rendimientos - rete20
+    : valorCdt - rete20;
+  return { rete4: rete4, rete20: rete20, diferencia: rete20 - rete4, saldoNeto: neto };
+}
+
+function validarTipoRetiro_(valor) {
+  var t = String(valor || '');
+  if (t !== TIPOS_RETIRO.CANCELAR && t !== TIPOS_RETIRO.RENDIMIENTOS) throw new Error('Indica qué desea el cliente: cancelar el producto o retirar solo los rendimientos.');
+  return t;
 }
 
 /* ------------------------------ Resumen ------------------------------ */
@@ -249,6 +271,7 @@ function guardarCaso(d) {
   var cfg = obtenerConfig();
   d = d || {};
 
+  var tipoRetiro = validarTipoRetiro_(d.tipoRetiro);
   var numeroCdt = validarNumeroCdt_(d.numeroCdt);
   var estadoCdt = validarEstadoCdt_(d.estadoCdt);
   var cancelado = estadoCdt === ESTADOS_CDT.CANCELADO;
@@ -282,17 +305,17 @@ function guardarCaso(d) {
     oficina = u.oficina;
   }
 
-  var calc = calcularRetenciones(rendimientos, valorCdt, cfg.tarifaNoResidente, cfg.tarifaSistema);
+  var calc = calcularRetenciones(rendimientos, valorCdt, cfg.tarifaNoResidente, cfg.tarifaSistema, tipoRetiro);
   var caso = {
     cliente: cliente, idCliente: idCliente, pais: pais, valorCdt: valorCdt, rendimientos: rendimientos,
     rete4: calc.rete4, rete20: calc.rete20, diferencia: calc.diferencia, saldoNeto: calc.saldoNeto,
     vencimiento: fechaVenc, formaPago: formaPago, status: ESTADOS.PENDIENTE,
     tarifa: cfg.tarifaNoResidente, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '',
     oficina: oficina, ingresadoPor: u.nombre, emailOficina: destinos[0], notasOficina: '', fechaPago: '',
-    correosDestino: destinos.join(', '), numeroCdt: numeroCdt, estadoCdt: estadoCdt
+    correosDestino: destinos.join(', '), numeroCdt: numeroCdt, estadoCdt: estadoCdt, tipoRetiro: tipoRetiro
   };
   var id = insertarCaso(caso);
-  registrarAuditoria(u.nombre, 'ingesta', id, 'Datos ingesta completos. CDT ' + numeroCdt + ' (' + estadoCdt + ')' + (u.rol === ROLES.IMPUESTOS ? '. Destinatarios: ' + caso.correosDestino : ''));
+  registrarAuditoria(u.nombre, 'ingesta', id, 'Datos ingesta completos. CDT ' + numeroCdt + ' (' + estadoCdt + '). Desea: ' + tipoRetiro + (u.rol === ROLES.IMPUESTOS ? '. Destinatarios: ' + caso.correosDestino : ''));
   caso.id = id;
   try { enviarConfirmacionIngesta(caso, u); } catch (err) { Logger.log('Correo ingesta: ' + err.message); }
   return { id: id, calculo: calc };
@@ -355,7 +378,7 @@ function resolverCaso(id, accion, datos) {
   if (['guardar', 'aprobar', 'rechazar'].indexOf(accion) < 0) throw new Error('Acción no válida.');
 
   // Rete4% ya fue pagada en la ingesta: se conserva; solo cambia la retención requerida.
-  var calc = calcularRetenciones(c.rendimientos, c.valorCdt, tarifa, 0);
+  var calc = calcularRetenciones(c.rendimientos, c.valorCdt, tarifa, 0, c.tipoRetiro);
   var cambios = {
     tarifa: tarifa, rete20: calc.rete20, diferencia: calc.rete20 - c.rete4,
     saldoNeto: calc.saldoNeto, formaPago: formaPago, notasLeydi: notas
@@ -426,7 +449,8 @@ function confirmarPago(id) {
 /* ------------------------------ Fecha de vencimiento ------------------------------ */
 
 /**
- * Edita los datos del certificado de un caso ya enviado: número, estado (Activo/Cancelado) y próximo vencimiento.
+ * Edita los datos del certificado de un caso ya enviado: número, estado (Activo/Cancelado), próximo vencimiento
+ * y lo que desea el cliente (recalcula el valor neto).
  * - Cancelar NO borra el caso: queda en las consultas con su historial; se limpia el próximo vencimiento.
  * - Un CDT cancelado no admite fecha; al reactivarlo la fecha vuelve a ser opcional.
  * - Número y estado se pueden cambiar en cualquier estado del trámite; la fecha solo en Pendiente o Aprobado.
@@ -440,6 +464,10 @@ function actualizarCdt(id, datos) {
   var d = datos || {}, c = r.caso, cambios = {};
 
   if (d.numeroCdt !== undefined) cambios.numeroCdt = validarNumeroCdt_(d.numeroCdt);
+  if (d.tipoRetiro !== undefined && d.tipoRetiro !== c.tipoRetiro) {
+    cambios.tipoRetiro = validarTipoRetiro_(d.tipoRetiro);
+    cambios.saldoNeto = calcularRetenciones(c.rendimientos, c.valorCdt, c.tarifa, 0, cambios.tipoRetiro).saldoNeto;   // la retención y la diferencia no cambian
+  }
   var estado = d.estadoCdt !== undefined ? validarEstadoCdt_(d.estadoCdt) : c.estadoCdt;
   if (estado !== c.estadoCdt) cambios.estadoCdt = estado;
 
@@ -461,6 +489,7 @@ function actualizarCdt(id, datos) {
   if (GESTORES.indexOf(u.rol) < 0) {
     var partes = [];
     if (cambios.numeroCdt !== undefined) partes.push('N.º CDT: ' + (c.numeroCdt || 'sin número') + ' → ' + cambios.numeroCdt);
+    if (cambios.tipoRetiro !== undefined) partes.push('Desea el cliente: ' + (c.tipoRetiro || 'no indicado') + ' → ' + cambios.tipoRetiro);
     if (cambios.estadoCdt !== undefined) partes.push('Estado del CDT: ' + c.estadoCdt + ' → ' + cambios.estadoCdt);
     if (cambios.vencimiento !== undefined) partes.push('Vencimiento: ' + fechaLegible(c.vencimiento) + ' → ' + fechaLegible(cambios.vencimiento));
     try { enviarCambioAlerta(nuevo, partes.join(' · ') + ' (cambio de ' + u.nombre + ')'); } catch (err) { Logger.log('Correo cambio CDT: ' + err.message); }
@@ -559,7 +588,7 @@ function crearPestañas() {
     var yo = Session.getEffectiveUser().getEmail();
     acc.getRange(2, 1, 3, 5).setValues([
       [yo, 'Administrador (cambiar)', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
-      ['leydi@dav.com.co', 'Leydi Librado Bernal', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
+      ['leydi@dav.com.co', 'Leydi Librado', ROLES.IMPUESTOS, 'Sí', 'Impuestos'],
       ['pepito@dav.com.co', 'Pepito García', ROLES.OFICINA, 'Sí', 'Bogotá Centro']
     ]);
   }
@@ -765,6 +794,7 @@ function filaACaso(fila) {
   if (fila[1] instanceof Date) c.fechaIngestaHora = fechaHora(fila[1]);
   if (c.formaPago === 'Débito' || c.formaPago === 'Transferencia') c.formaPago = 'Débito de cuenta';   // datos de versiones anteriores
   c.numeroCdt = String(c.numeroCdt == null ? '' : c.numeroCdt).trim();                              // casos anteriores: sin número
+  if (c.tipoRetiro !== TIPOS_RETIRO.CANCELAR && c.tipoRetiro !== TIPOS_RETIRO.RENDIMIENTOS) c.tipoRetiro = '';       // casos anteriores: no indicado
   if (c.estadoCdt !== ESTADOS_CDT.CANCELADO) c.estadoCdt = ESTADOS_CDT.ACTIVO;                       // casos anteriores: Activo
   if (!c.correosDestino) c.correosDestino = c.emailOficina;                                          // casos anteriores: solo la oficina que los ingresó
   return c;
@@ -1087,7 +1117,7 @@ function enviar_(para, asunto, titulo, cuerpoHtml, textoPlano) {
 /** Confirmación a las oficinas destinatarias y aviso de caso nuevo a los gestores (sin repetir a quien digitó). */
 function enviarConfirmacionIngesta(caso, usuario) {
   var datos = tablaDatos_([['N.º CDT', caso.numeroCdt || 'Sin número'], ['Caso', caso.id], ['Cliente', caso.cliente], ['País', caso.pais || 'No indicado'],
-    ['Rendimientos', pesos(caso.rendimientos)], ['Retención a cobrar', pesos(caso.diferencia)]]);
+    ['Qué desea el cliente', caso.tipoRetiro || 'No indicado'], ['Rendimientos', pesos(caso.rendimientos)], ['Retención a cobrar', pesos(caso.diferencia)], ['Valor neto para el cliente', pesos(caso.saldoNeto)]]);
   enviar_(correosDelCaso_(caso), 'Caso ' + caso.id + ' recibido - En autorización', 'Caso ' + caso.id + ' enviado a autorización',
     '<p>Recibimos el caso de <b>' + esc(caso.cliente) + '</b> para la oficina <b>' + esc(caso.oficina || 'indicada') + '</b>. Les avisaremos cuando sea revisado.</p>' + datos +
     '<p style="font-size:13px;color:#666">Mientras no conozcan la fecha de vencimiento, pueden agregarla después desde "Mis casos".</p>' + boton_('Ver mis casos', urlApp()));
@@ -1099,7 +1129,7 @@ function enviarConfirmacionIngesta(caso, usuario) {
 function enviarInstruccionesPago(caso) {
   var url = urlApp() + '?page=pago&case=' + encodeURIComponent(caso.id);
   var datos = tablaDatos_([['N.º CDT', caso.numeroCdt || 'Sin número'], ['Cliente', caso.cliente], ['Monto a cobrar', pesos(caso.diferencia)],
-    ['Vencimiento', fechaLegible(caso.vencimiento)], ['Forma de pago', caso.formaPago]]);
+    ['Qué desea el cliente', caso.tipoRetiro || 'No indicado'], ['Valor neto para el cliente', pesos(caso.saldoNeto)], ['Vencimiento', fechaLegible(caso.vencimiento)], ['Forma de pago', caso.formaPago]]);
   enviar_(correosDelCaso_(caso), 'Caso #' + caso.id + ' Aprobado - Instrucciones de Pago', 'Caso ' + caso.id + ' aprobado',
     '<p>El caso <b>' + esc(caso.id) + '</b> fue <b style="color:' + COLORES.VERDE + '">APROBADO</b> por ' +
     esc(caso.aprobadoPor) + '.</p><p style="color:#666;font-size:13px">Datos del caso:</p>' + datos +

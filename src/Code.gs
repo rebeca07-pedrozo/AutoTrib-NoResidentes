@@ -74,11 +74,26 @@ function iniciarSesion() {
 
 /* ------------------------------ Cálculos ------------------------------ */
 
-/** Rete4% / Rete20% / Diferencia / Saldo Neto (pesos enteros). */
-function calcularRetenciones(rendimientos, valorCdt, tarifa, tarifaSistema) {
+/**
+ * Rete4% / Rete20% / Diferencia / Valor neto del cliente (pesos enteros).
+ * El valor neto depende de lo que desea el cliente:
+ *   Cancelar producto -> valor del CDT + rendimientos - retefuente (Rete20)
+ *   Solo rendimientos -> rendimientos - retefuente (Rete20)
+ *   (sin indicar, casos anteriores) -> valor del CDT - retefuente, como se calculaba antes
+ */
+function calcularRetenciones(rendimientos, valorCdt, tarifa, tarifaSistema, tipoRetiro) {
   var rete4 = Math.round(rendimientos * tarifaSistema / 100);
   var rete20 = Math.round(rendimientos * tarifa / 100);
-  return { rete4: rete4, rete20: rete20, diferencia: rete20 - rete4, saldoNeto: valorCdt - rete20 };
+  var neto = tipoRetiro === TIPOS_RETIRO.CANCELAR ? valorCdt + rendimientos - rete20
+    : tipoRetiro === TIPOS_RETIRO.RENDIMIENTOS ? rendimientos - rete20
+    : valorCdt - rete20;
+  return { rete4: rete4, rete20: rete20, diferencia: rete20 - rete4, saldoNeto: neto };
+}
+
+function validarTipoRetiro_(valor) {
+  var t = String(valor || '');
+  if (t !== TIPOS_RETIRO.CANCELAR && t !== TIPOS_RETIRO.RENDIMIENTOS) throw new Error('Indica qué desea el cliente: cancelar el producto o retirar solo los rendimientos.');
+  return t;
 }
 
 /* ------------------------------ Resumen ------------------------------ */
@@ -133,6 +148,7 @@ function guardarCaso(d) {
   var cfg = obtenerConfig();
   d = d || {};
 
+  var tipoRetiro = validarTipoRetiro_(d.tipoRetiro);
   var numeroCdt = validarNumeroCdt_(d.numeroCdt);
   var estadoCdt = validarEstadoCdt_(d.estadoCdt);
   var cancelado = estadoCdt === ESTADOS_CDT.CANCELADO;
@@ -166,17 +182,17 @@ function guardarCaso(d) {
     oficina = u.oficina;
   }
 
-  var calc = calcularRetenciones(rendimientos, valorCdt, cfg.tarifaNoResidente, cfg.tarifaSistema);
+  var calc = calcularRetenciones(rendimientos, valorCdt, cfg.tarifaNoResidente, cfg.tarifaSistema, tipoRetiro);
   var caso = {
     cliente: cliente, idCliente: idCliente, pais: pais, valorCdt: valorCdt, rendimientos: rendimientos,
     rete4: calc.rete4, rete20: calc.rete20, diferencia: calc.diferencia, saldoNeto: calc.saldoNeto,
     vencimiento: fechaVenc, formaPago: formaPago, status: ESTADOS.PENDIENTE,
     tarifa: cfg.tarifaNoResidente, notasLeydi: '', aprobadoPor: '', fechaAprobacion: '',
     oficina: oficina, ingresadoPor: u.nombre, emailOficina: destinos[0], notasOficina: '', fechaPago: '',
-    correosDestino: destinos.join(', '), numeroCdt: numeroCdt, estadoCdt: estadoCdt
+    correosDestino: destinos.join(', '), numeroCdt: numeroCdt, estadoCdt: estadoCdt, tipoRetiro: tipoRetiro
   };
   var id = insertarCaso(caso);
-  registrarAuditoria(u.nombre, 'ingesta', id, 'Datos ingesta completos. CDT ' + numeroCdt + ' (' + estadoCdt + ')' + (u.rol === ROLES.IMPUESTOS ? '. Destinatarios: ' + caso.correosDestino : ''));
+  registrarAuditoria(u.nombre, 'ingesta', id, 'Datos ingesta completos. CDT ' + numeroCdt + ' (' + estadoCdt + '). Desea: ' + tipoRetiro + (u.rol === ROLES.IMPUESTOS ? '. Destinatarios: ' + caso.correosDestino : ''));
   caso.id = id;
   try { enviarConfirmacionIngesta(caso, u); } catch (err) { Logger.log('Correo ingesta: ' + err.message); }
   return { id: id, calculo: calc };
@@ -239,7 +255,7 @@ function resolverCaso(id, accion, datos) {
   if (['guardar', 'aprobar', 'rechazar'].indexOf(accion) < 0) throw new Error('Acción no válida.');
 
   // Rete4% ya fue pagada en la ingesta: se conserva; solo cambia la retención requerida.
-  var calc = calcularRetenciones(c.rendimientos, c.valorCdt, tarifa, 0);
+  var calc = calcularRetenciones(c.rendimientos, c.valorCdt, tarifa, 0, c.tipoRetiro);
   var cambios = {
     tarifa: tarifa, rete20: calc.rete20, diferencia: calc.rete20 - c.rete4,
     saldoNeto: calc.saldoNeto, formaPago: formaPago, notasLeydi: notas
@@ -310,7 +326,8 @@ function confirmarPago(id) {
 /* ------------------------------ Fecha de vencimiento ------------------------------ */
 
 /**
- * Edita los datos del certificado de un caso ya enviado: número, estado (Activo/Cancelado) y próximo vencimiento.
+ * Edita los datos del certificado de un caso ya enviado: número, estado (Activo/Cancelado), próximo vencimiento
+ * y lo que desea el cliente (recalcula el valor neto).
  * - Cancelar NO borra el caso: queda en las consultas con su historial; se limpia el próximo vencimiento.
  * - Un CDT cancelado no admite fecha; al reactivarlo la fecha vuelve a ser opcional.
  * - Número y estado se pueden cambiar en cualquier estado del trámite; la fecha solo en Pendiente o Aprobado.
@@ -324,6 +341,10 @@ function actualizarCdt(id, datos) {
   var d = datos || {}, c = r.caso, cambios = {};
 
   if (d.numeroCdt !== undefined) cambios.numeroCdt = validarNumeroCdt_(d.numeroCdt);
+  if (d.tipoRetiro !== undefined && d.tipoRetiro !== c.tipoRetiro) {
+    cambios.tipoRetiro = validarTipoRetiro_(d.tipoRetiro);
+    cambios.saldoNeto = calcularRetenciones(c.rendimientos, c.valorCdt, c.tarifa, 0, cambios.tipoRetiro).saldoNeto;   // la retención y la diferencia no cambian
+  }
   var estado = d.estadoCdt !== undefined ? validarEstadoCdt_(d.estadoCdt) : c.estadoCdt;
   if (estado !== c.estadoCdt) cambios.estadoCdt = estado;
 
@@ -345,6 +366,7 @@ function actualizarCdt(id, datos) {
   if (GESTORES.indexOf(u.rol) < 0) {
     var partes = [];
     if (cambios.numeroCdt !== undefined) partes.push('N.º CDT: ' + (c.numeroCdt || 'sin número') + ' → ' + cambios.numeroCdt);
+    if (cambios.tipoRetiro !== undefined) partes.push('Desea el cliente: ' + (c.tipoRetiro || 'no indicado') + ' → ' + cambios.tipoRetiro);
     if (cambios.estadoCdt !== undefined) partes.push('Estado del CDT: ' + c.estadoCdt + ' → ' + cambios.estadoCdt);
     if (cambios.vencimiento !== undefined) partes.push('Vencimiento: ' + fechaLegible(c.vencimiento) + ' → ' + fechaLegible(cambios.vencimiento));
     try { enviarCambioAlerta(nuevo, partes.join(' · ') + ' (cambio de ' + u.nombre + ')'); } catch (err) { Logger.log('Correo cambio CDT: ' + err.message); }

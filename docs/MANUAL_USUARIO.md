@@ -6,7 +6,7 @@ Abre el enlace que te compartió el administrador. El sistema identifica tu corr
 
 - **Oficina** (por defecto): ingresa CDT y ve solo sus casos.
 - **Operativo**: solo gestión (aprueba, ajusta tarifa, alertas y reportes).
-- **Impuestos** (Leydi Librado Bernal y su equipo): ingresa CDT en nombre de oficinas y gestiona.
+- **Impuestos** (Leydi Librado y su equipo): ingresa CDT en nombre de oficinas y gestiona.
 
 El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada uno.
 
@@ -22,7 +22,16 @@ El administrador cambia el rol en la hoja ACCESOS; la hoja ROLES explica cada un
 
 ![Formulario de ingesta con validación en tiempo real](img/Oficina-desktop-form.png)
 
-## Número y estado del CDT
+## Lo primero: qué desea el cliente
+
+Antes de llenar el resto, elige una opción:
+
+- **Cancelar el producto:** el cliente se lleva el valor del CDT + los rendimientos − la retefuente.
+- **Retirar solo los rendimientos:** el cliente se lleva los rendimientos − la retefuente.
+
+El cuadro rojo muestra el **valor neto para el cliente** según tu elección. Si cancela el producto, el CDT queda marcado como cancelado.
+
+# Número y estado del CDT
 
 - El **número del CDT** es obligatorio y es lo primero que ves en tablas y detalle.
 - **Activo** permite registrar la fecha del próximo vencimiento (opcional). **Cancelado** no pide fecha: el campo se desactiva. Un CDT cancelado **no se borra**: sigue en las consultas con su historial.

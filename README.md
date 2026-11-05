@@ -10,16 +10,16 @@ Hay **3 roles**. También están en la hoja **ROLES** del Sheet y en la lista de
 |---|---|---|
 | **Oficina** | **Por defecto**: cualquier correo que entre y no esté en ACCESOS con otro rol | Ingresar CDT (los avisos le llegan a ella misma), ver solo los casos donde su correo es destinatario, ver instrucciones de pago, confirmar pago, editar la fecha de vencimiento |
 | **Operativo** | Se asigna a mano en ACCESOS | Solo gestión: ver todos los casos, aprobar/rechazar (individual y por lote), cambiar tarifa %, alertas, reportes. No ingresa CDT |
-| **Impuestos** | Leydi Librado Bernal y el equipo de Impuestos (a mano en ACCESOS) | **Las dos visuales**: ingresa CDT en nombre de una o varias oficinas y los gestiona como Operativo |
+| **Impuestos** | Leydi Librado y el equipo de Impuestos (a mano en ACCESOS) | **Las dos visuales**: ingresa CDT en nombre de una o varias oficinas y los gestiona como Operativo |
 
 > El perfil **Contabilidad ya no existe**. Si en tu hoja ACCESOS quedó alguien con rol `Contabilidad`, entra con el rol por defecto (Oficina) hasta que le cambies el rol. Ya no se envían correos a Contabilidad.
 
 **Rol por defecto.** Quien abre la app por primera vez y no está en ACCESOS entra como **Oficina**: se agrega solo a ACCESOS (activo = Sí, nombre sacado del correo, oficina vacía) para que luego completes su nombre y oficina. Para dar otro rol, cambia la columna `rol` de esa fila.
 - Bloquear a alguien: pon `activo = No` en su fila.
 - Quitar el rol por defecto (solo entra quien esté en ACCESOS): deja vacía la celda de CONFIG → *Rol por defecto*.
-- El usuario que ejecuta `inicializarSistema()` queda como **Impuestos** (cambia su nombre en ACCESOS); la fila de ejemplo de Leydi queda como `Leydi Librado Bernal` con rol Impuestos (reemplaza su correo por el real).
+- El usuario que ejecuta `inicializarSistema()` queda como **Impuestos** (cambia su nombre en ACCESOS); la fila de ejemplo de Leydi queda como `Leydi Librado` con rol Impuestos (reemplaza su correo por el real).
 - Como cualquier persona de la organización entra como Oficina, si necesitas lista cerrada usa la opción anterior o `APP.VALIDAR_DOMINIO` en Config.gs.
-- Los nombres ya escritos en tu hoja ACCESOS **no se cambian solos**: corrige a mano el nombre de tu compañera a `Leydi Librado Bernal`.
+- Los nombres ya escritos en tu hoja ACCESOS **no se cambian solos**: corrige a mano el nombre de tu compañera a `Leydi Librado`.
 
 ## Ingreso en nombre de una oficina (perfil Impuestos)
 
@@ -116,12 +116,24 @@ Regla: se avisa **una vez por fecha de vencimiento** cuando faltan ≤ 5 días (
 ## Reglas de negocio
 
 ```
-Rete4%     = Rendimientos × Tarifa Sistema (4 %)       ← se fija en la ingesta
-Rete20%    = Rendimientos × Tarifa (20 % por defecto; Impuestos/Operativo pueden cambiarla 0–100 %)
-Diferencia = Rete20% − Rete4%
-Saldo Neto = Valor CDT − Rete20%
+Rete4%      = Rendimientos × Tarifa Sistema (4 %)       ← se fija en la ingesta
+Rete20%     = Rendimientos × Tarifa (20 % por defecto; Impuestos/Operativo pueden cambiarla 0–100 %)   ← la retefuente
+Diferencia  = Rete20% − Rete4%                          ← "retención no descontada", lo que se registra en el pago
+
+Valor neto para el cliente (según lo que desea):
+  Cancelar el producto     = Valor del CDT + Rendimientos − Retefuente (Rete20%)
+  Retirar solo rendimientos = Rendimientos − Retefuente (Rete20%)
 ```
-Con rendimientos de $5.000.000: 200.000 / 1.000.000 / 800.000 / saldo 4.000.000 (si el valor del CDT es igual a los rendimientos). Con tarifa 15 %: 750.000 / 550.000.
+Ejemplo (CDT $10.000.000, rendimientos $5.000.000, tarifa 20 %): Rete4 200.000 · Rete20 1.000.000 · Diferencia 800.000 · **cancelar el producto → $14.000.000** · **solo rendimientos → $4.000.000**. Con tarifa 15 %: retefuente 750.000 → 14.250.000 / 4.250.000 (la diferencia pasa a 550.000).
+
+### Qué desea el cliente
+
+- **Es la primera pregunta del formulario** y es obligatoria: *Cancelar el producto* o *Retirar solo los rendimientos*. El cálculo de la derecha muestra "Valor neto para el cliente" con su fórmula y no da cifra hasta que se elija.
+- Al elegir *Cancelar el producto* el estado del CDT pasa a **Cancelado** (sin fecha de vencimiento); con *Solo rendimientos* queda **Activo**. Es solo una sugerencia: se puede cambiar en el segundo bloque.
+- Se guarda en la columna **Tipo Retiro** de CASOS_CDT; el valor neto en `Saldo Neto`. Aparece en el detalle, las instrucciones de pago, los correos (recibido y aprobado) y el CSV ("Qué desea el cliente" y "Valor neto cliente").
+- Se puede corregir después desde *Datos del CDT* (recalcula el valor neto; la retención y la diferencia no cambian). Si el gestor cambia la tarifa, el valor neto se recalcula con la regla de la opción elegida.
+- **Casos anteriores:** quedan "No indicado" y conservan su valor neto guardado (se calculaba como valor del CDT − retefuente); se les puede asignar la opción desde el detalle. Se agrega la columna al re-ejecutar `inicializarSistema`.
+- **Supuesto a confirmar:** "retefuente" = la retención al porcentaje aplicado (Rete20 %), no la diferencia a cobrar.
 
 Estados: `Pendiente → Aprobado → Pagado` o `Pendiente → Rechazado`. Nunca se borran casos.
 
@@ -138,7 +150,7 @@ Estados: `Pendiente → Aprobado → Pagado` o `Pendiente → Rechazado`. Nunca 
 
 ```bash
 npm install            # solo para la prueba de UI (Playwright)
-npm test               # 51 pruebas de lógica del servidor (roles, cálculo, correos, alertas)
+npm test               # 57 pruebas de lógica del servidor (roles, cálculo, correos, alertas)
 npm run test:ui        # formulario, validación en vivo y panel en Chromium (desktop + móvil)
 npm run manual         # regenera docs/Manual_Usuario_AutoTrib.pdf
 ```

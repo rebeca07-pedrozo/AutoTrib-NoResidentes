@@ -15,7 +15,7 @@ t('validación de dominio (opcional) bloquea correos externos', () => { c.APP.VA
 t('usuario inactivo no entra', () => { E.hojas.ACCESOS.appendRow(['inactivo@dav.com.co', 'Ina', 'Oficina', 'No', '']); como('inactivo@dav.com.co'); assert.strictEqual(c.iniciarSesion().ok, false); });
 t('Oficina entra y recibe rol', () => { como('pepito@dav.com.co'); const r = c.iniciarSesion(); assert.ok(r.ok); assert.strictEqual(r.usuario.rol, 'Oficina'); });
 
-const base = { numeroCdt: '0012345678', estadoCdt: 'Activo', cliente: 'Juan Pérez', idCliente: '123456', pais: 'mexico', valorCdt: 5000000, rendimientos: 5000000, formaPago: 'Débito de cuenta', vencimiento: '' };
+const base = { tipoRetiro: 'Solo rendimientos', numeroCdt: '0012345678', estadoCdt: 'Activo', cliente: 'Juan Pérez', idCliente: '123456', pais: 'mexico', valorCdt: 5000000, rendimientos: 5000000, formaPago: 'Débito de cuenta', vencimiento: '' };
 let id;
 t('cálculo del ejemplo (rend 5M → 200K / 1M / 800K / 4M)', () => {
   const r = c.calcularRetenciones(5000000, 5000000, 20, 4);
@@ -57,7 +57,7 @@ t('Leydi aprueba con tarifa 15% → recalcula, audita, envía instrucciones', ()
   const antes = E.correos.length;
   const n = c.resolverCaso(id, 'aprobar', { tarifa: 15, formaPago: 'Efectivo', vencimiento: '', notas: 'Bien' });
   assert.strictEqual(n.status, 'Aprobado'); assert.strictEqual(n.rete20, 750000); assert.strictEqual(n.diferencia, 550000);
-  assert.strictEqual(n.saldoNeto, 4250000); assert.strictEqual(n.aprobadoPor, 'Leydi Librado Bernal');
+  assert.strictEqual(n.saldoNeto, 4250000); assert.strictEqual(n.aprobadoPor, 'Leydi Librado');
   const nuevos = E.correos.slice(antes);
   assert.ok(nuevos.some(m => m.to === 'pepito@dav.com.co' && /Aprobado - Instrucciones de Pago/.test(m.subject) && /page=pago&amp;case=CDT001/.test(m.htmlBody)));
   const aud = c.obtenerAuditoria(id).map(a => a.accion);
@@ -97,13 +97,13 @@ t('país libre: "mexico" → México; texto no listado se acepta; vacío es vál
   assert.strictEqual(c.normalizarPais_('ESPANA'), 'España'); assert.strictEqual(c.normalizarPais_('  estados UNIDOS '), 'Estados Unidos');
 });
 t('solo hay Débito de cuenta y Efectivo', () => assert.deepStrictEqual(JSON.parse(JSON.stringify(c.FORMAS_PAGO)), ['Débito de cuenta', 'Efectivo']));
-E.hojas.ACCESOS.appendRow(['librado@dav.com.co', 'Leydi Librado Bernal', 'Impuestos', 'Sí', 'Impuestos']);
+E.hojas.ACCESOS.appendRow(['librado@dav.com.co', 'Leydi Librado', 'Impuestos', 'Sí', 'Impuestos']);
 E.hojas.ACCESOS.appendRow(['bogota@dav.com.co', 'Oficina Bogotá', 'Oficina', 'Sí', 'Bogotá Centro']);
 E.hojas.ACCESOS.appendRow(['cali@dav.com.co', 'Oficina Cali', 'Oficina', 'Sí', 'Cali']);
 E.hojas.ACCESOS.appendRow(['conta@dav.com.co', 'Conta', 'Contabilidad', 'Sí', '']);
 let idImp;
 t('Impuestos ve ambas visuales y exige destinatarios válidos', () => {
-  como('librado@dav.com.co'); const s = c.iniciarSesion(); assert.strictEqual(s.usuario.rol, 'Impuestos'); assert.strictEqual(s.usuario.nombre, 'Leydi Librado Bernal');
+  como('librado@dav.com.co'); const s = c.iniciarSesion(); assert.strictEqual(s.usuario.rol, 'Impuestos'); assert.strictEqual(s.usuario.nombre, 'Leydi Librado');
   sinErrores(() => c.guardarCaso(base), /al menos un correo/);
   sinErrores(() => c.guardarCaso(Object.assign({}, base, { correosDestino: 'bogota@dav.com.co, malo' })), /no válidos/);
   assert.ok(Array.isArray(c.listarCasos({}))); assert.ok(Array.isArray(c.listarMisCasos()));
@@ -208,6 +208,52 @@ t('dist/ (5 archivos) arranca solo y funciona sin src/', () => {
   const D = crearEntorno({ dist: true, email: 'leydi@dav.com.co' }); D.ctx.inicializarSistema();
   assert.strictEqual(D.ctx.iniciarSesion().ok, true); assert.strictEqual(typeof D.ctx.include, 'function'); assert.strictEqual(typeof D.ctx.imagenesIniciales_, 'function');
   assert.deepStrictEqual(JSON.parse(JSON.stringify(D.ctx.imagenesIniciales_())), { logo: '', carga: '' });
+});
+
+console.log('Qué desea el cliente (cancelar producto / solo rendimientos)');
+t('cálculo: cancelar producto = CDT + rendimientos - retefuente; solo rendimientos = rendimientos - retefuente', () => {
+  const j = o => JSON.parse(JSON.stringify(o));
+  // CDT 10M, rendimientos 5M, retefuente 20% = 1M
+  assert.strictEqual(c.calcularRetenciones(5000000, 10000000, 20, 4, 'Cancelar producto').saldoNeto, 14000000);
+  assert.strictEqual(c.calcularRetenciones(5000000, 10000000, 20, 4, 'Solo rendimientos').saldoNeto, 4000000);
+  // con tarifa 15%: retefuente 750.000
+  assert.strictEqual(c.calcularRetenciones(5000000, 10000000, 15, 4, 'Cancelar producto').saldoNeto, 14250000);
+  assert.strictEqual(c.calcularRetenciones(5000000, 10000000, 15, 4, 'Solo rendimientos').saldoNeto, 4250000);
+  // la retención y la diferencia a cobrar no dependen de lo que desee el cliente
+  assert.deepStrictEqual([j(c.calcularRetenciones(5000000, 10000000, 20, 4, 'Cancelar producto')).rete20, j(c.calcularRetenciones(5000000, 10000000, 20, 4, 'Cancelar producto')).diferencia], [1000000, 800000]);
+  assert.strictEqual(c.calcularRetenciones(5000000, 10000000, 20, 4, 'Solo rendimientos').diferencia, 800000);
+});
+t('es obligatorio indicar qué desea el cliente y solo valen las dos opciones', () => {
+  como('pepito@dav.com.co');
+  sinErrores(() => c.guardarCaso(Object.assign({}, base, { tipoRetiro: '' })), /qué desea el cliente/);
+  sinErrores(() => c.guardarCaso(Object.assign({}, base, { tipoRetiro: 'Otro' })), /qué desea el cliente/);
+});
+let idRet;
+t('se guarda con el valor neto correcto en cada opción y se recupera', () => {
+  const a = c.guardarCaso(Object.assign({}, base, { numeroCdt: 'RET-001', valorCdt: 10000000, rendimientos: 5000000, tipoRetiro: 'Cancelar producto' })).id; idRet = a;
+  const b = c.guardarCaso(Object.assign({}, base, { numeroCdt: 'RET-002', valorCdt: 10000000, rendimientos: 5000000, tipoRetiro: 'Solo rendimientos' })).id;
+  assert.strictEqual(c.buscarCaso(a).caso.saldoNeto, 14000000); assert.strictEqual(c.buscarCaso(a).caso.tipoRetiro, 'Cancelar producto');
+  assert.strictEqual(c.buscarCaso(b).caso.saldoNeto, 4000000); assert.strictEqual(c.buscarCaso(b).caso.tipoRetiro, 'Solo rendimientos');
+  assert.ok(E.correos.some(m => /recibido/.test(m.subject) && m.htmlBody.includes('Cancelar producto') && m.htmlBody.includes('$ 14,000,000')));
+});
+t('al cambiar la tarifa se recalcula el neto según lo que desea el cliente', () => {
+  como('leydi@dav.com.co');
+  const n = c.resolverCaso(idRet, 'aprobar', { tarifa: 15, formaPago: 'Efectivo' });
+  assert.strictEqual(n.rete20, 750000); assert.strictEqual(n.saldoNeto, 14250000); assert.strictEqual(n.diferencia, 550000);
+  assert.ok(E.correos.some(m => /Aprobado - Instrucciones/.test(m.subject) && m.htmlBody.includes('Valor neto para el cliente') && m.htmlBody.includes('$ 14,250,000')));
+});
+t('se puede corregir lo que desea el cliente después: recalcula el neto sin tocar la retención', () => {
+  como('pepito@dav.com.co');
+  const n = c.actualizarCdt(idRet, { tipoRetiro: 'Solo rendimientos' });
+  assert.strictEqual(n.tipoRetiro, 'Solo rendimientos'); assert.strictEqual(n.saldoNeto, 4250000); assert.strictEqual(n.rete20, 750000); assert.strictEqual(n.diferencia, 550000);
+  assert.ok(c.obtenerAuditoria(idRet).some(a => /tipoRetiro: Cancelar producto → Solo rendimientos/.test(a.detalle)));
+  sinErrores(() => c.actualizarCdt(idRet, { tipoRetiro: 'Nada' }), /qué desea el cliente/);
+});
+t('casos anteriores sin dato: "no indicado", conservan su valor y se les puede asignar', () => {
+  const fila = E.hojas.CASOS_CDT.filas; const ix = fila.findIndex(f => f && f[0] === idRet);
+  const copia = fila[ix].slice(); copia[0] = 'CDT950'; copia[26] = ''; copia[10] = 4000000; fila[fila.length] = copia;
+  const h = c.buscarCaso('CDT950').caso; assert.strictEqual(h.tipoRetiro, ''); assert.strictEqual(h.saldoNeto, 4000000);
+  como('leydi@dav.com.co'); assert.strictEqual(c.actualizarCdt('CDT950', { tipoRetiro: 'Cancelar producto' }).saldoNeto, c.calcularRetenciones(5000000, 10000000, 15, 4, 'Cancelar producto').saldoNeto);
 });
 
 console.log('Número y estado del CDT');

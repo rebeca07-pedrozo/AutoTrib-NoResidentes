@@ -73,7 +73,7 @@ function enviar_(para, asunto, titulo, cuerpoHtml, textoPlano) {
 /** Confirmación a las oficinas destinatarias y aviso de caso nuevo a los gestores (sin repetir a quien digitó). */
 function enviarConfirmacionIngesta(caso, usuario) {
   var datos = tablaDatos_([['N.º CDT', caso.numeroCdt || 'Sin número'], ['Caso', caso.id], ['Cliente', caso.cliente], ['País', caso.pais || 'No indicado'],
-    ['Rendimientos', pesos(caso.rendimientos)], ['Retención a cobrar', pesos(caso.diferencia)]]);
+    ['Qué desea el cliente', caso.tipoRetiro || 'No indicado'], ['Rendimientos', pesos(caso.rendimientos)], ['Retención a cobrar', pesos(caso.diferencia)], ['Valor neto para el cliente', pesos(caso.saldoNeto)]]);
   enviar_(correosDelCaso_(caso), 'Caso ' + caso.id + ' recibido - En autorización', 'Caso ' + caso.id + ' enviado a autorización',
     '<p>Recibimos el caso de <b>' + esc(caso.cliente) + '</b> para la oficina <b>' + esc(caso.oficina || 'indicada') + '</b>. Les avisaremos cuando sea revisado.</p>' + datos +
     '<p style="font-size:13px;color:#666">Mientras no conozcan la fecha de vencimiento, pueden agregarla después desde "Mis casos".</p>' + boton_('Ver mis casos', urlApp()));
@@ -85,7 +85,7 @@ function enviarConfirmacionIngesta(caso, usuario) {
 function enviarInstruccionesPago(caso) {
   var url = urlApp() + '?page=pago&case=' + encodeURIComponent(caso.id);
   var datos = tablaDatos_([['N.º CDT', caso.numeroCdt || 'Sin número'], ['Cliente', caso.cliente], ['Monto a cobrar', pesos(caso.diferencia)],
-    ['Vencimiento', fechaLegible(caso.vencimiento)], ['Forma de pago', caso.formaPago]]);
+    ['Qué desea el cliente', caso.tipoRetiro || 'No indicado'], ['Valor neto para el cliente', pesos(caso.saldoNeto)], ['Vencimiento', fechaLegible(caso.vencimiento)], ['Forma de pago', caso.formaPago]]);
   enviar_(correosDelCaso_(caso), 'Caso #' + caso.id + ' Aprobado - Instrucciones de Pago', 'Caso ' + caso.id + ' aprobado',
     '<p>El caso <b>' + esc(caso.id) + '</b> fue <b style="color:' + COLORES.VERDE + '">APROBADO</b> por ' +
     esc(caso.aprobadoPor) + '.</p><p style="color:#666;font-size:13px">Datos del caso:</p>' + datos +
